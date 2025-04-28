@@ -1,0 +1,47 @@
+body{
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.corpo{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-size: 2em;
+    padding: 13%;
+}
+
+#icone{
+    display: flex;
+    flex-direction: row;
+    justify-content:space-evenly;
+    font-size: 2em;
+}
+
+footer{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-size: 120%;
+    background-color:darkgray;
+    padding: 1.1%;
+}
+
+.item1{
+    background-color: aqua;
+    text-align: center;
+    width: 70%;
+}
+
+.item2{
+    background-color: aqua;
+    text-align: center;
+    width: 70%;
+}
+
+.item3{
+    background-color: aqua;
+    text-align: center;
+    width: 70%;
+}
