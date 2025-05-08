@@ -1,14 +1,16 @@
 (function() {
     // Recursos para apresentar
     const resources = [
-      'Laboratório 1',
-      'Laboratório 2',
-      'Laboratório 3',
+      'Laboratório informática',
+      'Laboratório línguas',
+      'Laboratório Matemática',
+      'Laboratório de Física',
+      'Laboratório de Quimica',
       'Auditório',
-      'Data-show',
-      'Microfone',
-      'Notebook',
-      'Caixa de som'
+      'Data-shows',
+      'Microfones',
+      'Notebooks',
+      'Caixa de sons'
     ];
 
     // Dados de disponibilidade simulados para o mês atual (exemplo)
