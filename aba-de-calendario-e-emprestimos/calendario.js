@@ -10,7 +10,7 @@
       'Data-shows',
       'Microfones',
       'Notebooks',
-      'Caixa de sons'
+      'Caixas de sons'
     ];
 
     // Dados de disponibilidade simulados para o mês atual (exemplo)
