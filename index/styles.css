@@ -7,15 +7,15 @@
 body{
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
 }
 
 .corpo{
-    display: flex;
-    flex-direction: column;
+    display: block;
+    justify-items: center;
     align-items: center;
+    justify-content: space-around;
     font-size: 2em;
-    padding: 13%;
+    padding: 20%;
 }
 
 #icone{
@@ -32,7 +32,7 @@ footer{
     font-size: 120%;
     background-color:darkgray;
     padding: 1.1%;
-    margin-top: 5.5em;
+    margin-top: 47px;
 }
 
 .item1{
