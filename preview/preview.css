@@ -1,0 +1,23 @@
+*{
+    border: none;
+    margin: 0;
+    justify-items: center;
+    align-content: center;
+}
+
+.container{
+    display: flex;
+    flex-direction: column;
+}
+
+.menu{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 2em;
+    padding: 12%;
+    background-color: aqua;
+    border-radius: 5%;
+    width: 100%;
+}
