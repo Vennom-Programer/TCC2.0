@@ -10,4 +10,6 @@ function animação() {
         } else {
             item.style.animation = '';
         }
-    });
+    }
+)
+}
