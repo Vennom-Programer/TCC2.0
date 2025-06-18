@@ -1,15 +1,19 @@
-function animação() {
+document.addEventListener('DOMContentLoaded', function () {
+    const menuToggle = document.querySelector('.menu-toggle');
     const menu = document.querySelector('.menu');
-    const menuItems = document.querySelectorAll('.menu-item');
+    const menuLinks = document.querySelectorAll('.menu a');
 
-    menu.classList.toggle('active');
+    if (menuToggle && menu) {
+        menuToggle.addEventListener('click', function () {
+            menu.classList.toggle('active');
+            menuToggle.classList.toggle('active');
+        });
 
-    menuItems.forEach((item, index) => {
-        if (menu.classList.contains('active')) {
-            item.style.animation = `fadeIn 0.5s ease forwards ${index / 7 + 0.3}s`;
-        } else {
-            item.style.animation = '';
-        }
+        menuLinks.forEach(link => {
+            link.addEventListener('click', function () {
+                menu.classList.remove('active');
+                menuToggle.classList.remove('active');
+            });
+        });
     }
-)
-}
+});

@@ -1,0 +1,137 @@
+/* Reset básico */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: linear-gradient(135deg, #5ADBF2, #7AE3F5);
+    font-family: 'Segoe UI', Arial, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cadastro-container {
+    background: #fff;
+    padding: 2.5rem 2rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    width: 100%;
+    max-width: 400px;
+}
+
+.cadastro-container h2 {
+    text-align: center;
+    margin-bottom: 1.5rem;
+    color: #2d3a4b;
+    font-weight: 600;
+}
+
+.form-group {
+    margin-bottom: 1.2rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.4rem;
+    color: #4a5568;
+    font-size: 1rem;
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 1rem;
+    background: #f9fafb;
+    transition: border 0.2s;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    border-color: #2563eb;
+    outline: none;
+}
+
+.cadastro-btn {
+    width: 100%;
+    padding: 0.8rem 0;
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 1.1em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    margin-top: 0.5rem;
+    margin-left: 5px;
+}
+
+.cadastro-btn:hover {
+    background: #1e40af;
+}
+
+.cadastro-link {
+    display: block;
+    text-align: center;
+    margin-top: 1.2rem;
+    color: #2563eb;
+    text-decoration: none;
+    font-size: 0.97rem;
+}
+
+.cadastro-link:hover {
+    text-decoration: underline;
+}
+
+
+.social-cadastro {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    margin-top: 1.5rem;
+}
+
+.cadastro-social-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.7rem 0;
+    border: none;
+    border-radius: 6px;
+    font-size: 1em;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+
+.cadastro-social-btn.email {
+    background: #e2e8f0;
+    color: #2d3a4b;
+}
+
+.cadastro-social-btn.email:hover {
+    background: #cbd5e1;
+}
+
+.cadastro-social-btn.facebook {
+    background: #1877f2;
+    color: #fff;
+}
+
+.cadastro-social-btn.facebook:hover {
+    background: #145db2;
+}
+
+.cadastro-social-btn .icon {
+    margin-right: 0.7rem;
+    font-size: 1.2em;
+    display: flex;
+    align-items: center;
+}

@@ -1,16 +1,15 @@
 <!DOCTYPE html>
-<html lang="pt-Br">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menu de Acesso</title>
     <link rel="stylesheet" href="menu.css">
-    <title>Menu</title>
 </head>
 <body>
-    <section class="container">
-        <h1 class="menu">Menu</h1>
-        <button class="cadastrar-se">Cadastrar-se</button>
-        <button class="login">Login</button>
-    </section>
+    <div id="menu-container">
+        <h2>O que você deseja fazer?</h2>
+        <button id="menu-btn" onclick="window.location.href='cadastro.html'">Cadastrar</button>
+        <button id="menu-btn" onclick="window.location.href='login.html'">Fazer Login</button>
+    </div>
 </body>
 </html>
