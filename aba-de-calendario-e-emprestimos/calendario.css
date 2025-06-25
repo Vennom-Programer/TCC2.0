@@ -6,7 +6,7 @@
   }
   body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(to right, #0066cc, #66ccff);
+    background: linear-gradient(135deg, #5ADBF2, #7AE3F5);
     color: #333;
     display: flex;
     justify-content: center;
