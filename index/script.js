@@ -21,3 +21,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // window.location.href = 'arquivos.html';
     });
 });
+
+document.getElementsByClassName('labs') [0].addEventListener('click', function() {
+    window.location.href = 'calendario.html';
+});
