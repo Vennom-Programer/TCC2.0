@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro de Itens e Equipamentos</title>
+    <link rel="stylesheet" href="cadastroItem.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <h1><i class="fas fa-plus-circle"></i> Cadastro de Itens</h1>
+        
+        <form>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="item-name">Nome do Item</label>
+                    <input type="text" id="item-name" placeholder="Ex: Microscópio, Projetor" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="item-type">Tipo de Item</label>
+                    <select id="item-type" required>
+                        <option value="">Selecione...</option>
+                        <option value="laboratorio">Laboratório</option>
+                        <option value="auditorio">Auditório</option>
+                        <option value="equipamento">Equipamento</option>
+                        <option value="material">Material Educacional</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="item-description">Descrição</label>
+                <textarea id="item-description" rows="4" placeholder="Descreva o item ou equipamento..."></textarea>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="item-quantity">Quantidade</label>
+                    <input type="number" id="item-quantity" min="1" value="1">
+                </div>
+                
+                <div class="form-group">
+                    <label for="item-location">Localização</label>
+                    <input type="text" id="item-location" placeholder="Sala, prédio ou departamento">
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="item-specs">Especificações Técnicas</label>
+                <textarea id="item-specs" rows="3" placeholder="Informações técnicas relevantes..."></textarea>
+            </div>
+            
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Salvar Item
+                </button>
+            </div>
+        </form>
+    </div>
+</body>
+</html>
