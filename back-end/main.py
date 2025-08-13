@@ -1,5 +1,5 @@
-from flask import Flask, render_template, request, redirect, make_response, jsonify
-import mysql.connector
+from flask import Flask, render_template, request, redirect, make_response, jsonify # pyright: ignore[reportMissingImports]
+import mysql.connector # type: ignore
 
 app = Flask(__name__)
 
