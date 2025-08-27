@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{url_for('static', filename='css/styles.css')}}">
+    <title>SmartReserva</title>
+  
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="{{url_for('static', filename='js/script.js')}}"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Sistema de Agendamento</h1>
+        
+        <div class="menu-buttons">
+            <a href="#" class="menu-button laboratorio">
+                <i class="fas fa-flask"></i>
+                <h2 class="labs">Laboratórios</h2>
+                <p>Agende equipamentos e espaços para pesquisa</p>
+            </a>
+            
+            <a href="#" class="menu-button auditorio">
+                <i class="fas fa-chalkboard-teacher"></i>
+                <h2>Auditório</h2>
+                <p>Reserve para palestras e eventos acadêmicos</p>
+            </a>
+            
+            <a href="#" class="menu-button arquivos">
+                <i class="fas fa-book"></i>
+                <h2>Arquivos Educacionais</h2>
+                <p>Acesse materiais didáticos e documentos</p>
+            </a>
+        </div>
+    </div>
+</body>
+</html>
