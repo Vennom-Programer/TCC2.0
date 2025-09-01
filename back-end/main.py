@@ -5,7 +5,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def menu():
-    return render_template('menu.html')
+    return render_template('cadastroItem.html')
 
 #mydb = mysql.connector.connect(
 #     host="localhost",
