@@ -47,6 +47,8 @@ def cadastroItensPost():
 
     values = (nomeItem, tipoItem, descricao, quantidade, localizacao, especificacaoTecnica)
     cursor.execute(query, values)
+    mydb.commit()
+    cursor.close()
     
     return render_template('cadastroItem.html')
 
