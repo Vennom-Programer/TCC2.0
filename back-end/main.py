@@ -22,10 +22,61 @@ def menu():
 def cadastro():
     return render_template('cadastro.html')
 
+# Rota para processar cadastro via POST
+@app.route('/cadastro', methods=['POST'])
+def cadastro_post():
+    nome = request.form.get('nome')
+    email = request.form.get('email')
+    senha = request.form.get('senha')
+    numeroDaMatricula = request.form.get('numeroDaMatricula')
+
+    cursor = mydb.cursor()
+    query = "INSERT INTO usuarios (nome, email, senha, numeroDaMatricula) VALUES (%s, %s, %s, %s)"
+    values = (nome, email, senha, numeroDaMatricula)
+    try:
+        cursor.execute(query, values)
+        mydb.commit()
+        cursor.close()
+        return redirect('/login')
+    except Exception as e:
+        cursor.close()
+        return render_template('cadastro.html', mensagem=f'Erro ao cadastrar: {str(e)}')
+
+def cadastroPost():
+    nome = request.form.get('name')
+    email = request.form.get('email')
+    senha = request.form.get('password')
+    numeroDaMatricula = request.form.get('numeroDaMatricula')
+    
+    cursor = mydb.cursor()
+    query = "INSERT INTO usuarios (email, senha, nome, numeroDaMatricula) VALUES ('1', %s, %s, %s)"
+    values = (nome, email, senha, numeroDaMatricula)
+    cursor.execute(query, values)
+    mydb.commit()
+    cursor.close()
+    
+    return redirect('/login')
+
 # Rota para tela de login
 @app.route('/login')
 def login():
     return render_template('login.html')
+
+def loginPost():
+    email = request.form.get('email')
+    senha = request.form.get('password')
+    
+    cursor = mydb.cursor()
+    query = "SELECT * FROM usuarios WHERE email = %s AND senha = %s"
+    values = (email, senha)
+    cursor.execute(query, values)
+    user = cursor.fetchone()
+    cursor.close()
+    
+    if user:
+        return redirect('/index.html')
+    else:
+        return render_template('login.html', error="Email ou senha incorretos")
     
 
 @app.route('/cadastroItens')
@@ -53,8 +104,8 @@ def cadastroItensPost():
     return render_template('cadastroItem.html')
 
 
-#@app.route('/')
-#def index():
-    # cursor = db.cursor(dictionary=True)
-    # cursor.execute("SELECT * FROM items")
- #return render_template("index.html")
+@app.route('/index.html')
+def index():
+    return render_template('index.html')
+
+  

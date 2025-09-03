@@ -11,13 +11,12 @@
 <body>
   <div class="login-container" role="main" aria-label="Tela de Login">
     <h1 class="login-title">Entrar na conta</h1>
-    <form id="loginForm" novalidate>
+    <form id="loginForm" action="/login" novalidate>
       <label for="email">E-mail</label>
       <input type="email" id="email" name="email" placeholder="Digite seu email" required autocomplete="username" aria-required="true" aria-describedby="emailHelp" />
       <label for="password">Senha</label>
       <input type="password" id="password" name="password" placeholder="Digite sua senha" required autocomplete="current-password" aria-required="true" />
-      <div id="error" class="error-message" aria-live="assertive"></div>
-      <a href="/index/index.html"><button type="submit">Entrar</button></a>
+      <button type="submit">Entrar</button>
     </form>
   </div>
 
