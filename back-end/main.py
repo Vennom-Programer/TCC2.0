@@ -1,3 +1,4 @@
+
 from flask import Flask, render_template, request, redirect
 import mysql.connector
 
@@ -62,7 +63,7 @@ def cadastroPost():
 def login():
     return render_template('login.html')
 
-@app.route('/login', methods=['POST'])
+
 def loginPost():
     email = request.form.get('email')
     senha = request.form.get('password')
@@ -105,8 +106,19 @@ def cadastroItensPost():
     return render_template('cadastroItem.html')
 
 
-@app.route('/index.html')
+@app.route('/index.html', methods=['GET', 'POST'])
 def index():
     return render_template('/index.html')
 
-  
+@app.route('/calendario.html', methods=['GET', 'POST'])
+def calendario():
+    from datetime import datetime
+    import calendar
+    today = datetime.today()
+    year = today.year
+    month = today.month
+    total_days = calendar.monthrange(year, month)[1]
+    disponibilidade = {}
+    for d in range(1, total_days + 1):
+        disponibilidade[d] = 'disponivel' if d % 2 == 0 else 'indisponivel'
+    return render_template('calendario.html', disponibilidade=disponibilidade, year=year, month=month)

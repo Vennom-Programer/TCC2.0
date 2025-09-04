@@ -5,23 +5,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
     laboratorioBtn.addEventListener('click', function (e) {
         e.preventDefault();
-        alert('Você clicou em Laboratórios!');
-        // window.location.href = 'laboratorios.html'; // Exemplo de redirecionamento
+        window.location.href = '/calendario.html';
     });
 
     auditorioBtn.addEventListener('click', function (e) {
         e.preventDefault();
-        alert('Você clicou em Auditório!');
-        // window.location.href = 'auditorio.html';
+        window.location.href = '/calendario.html';
     });
 
     arquivosBtn.addEventListener('click', function (e) {
         e.preventDefault();
-        alert('Você clicou em Arquivos Educacionais!');
-        // window.location.href = 'arquivos.html';
+        window.location.href = '/calendario.html';
     });
-});
-
-document.getElementsByClassName('labs') [0].addEventListener('click', function() {
-    window.location.href = 'calendario.html';
 });
