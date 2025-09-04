@@ -62,6 +62,7 @@ def cadastroPost():
 def login():
     return render_template('login.html')
 
+@app.route('/login', methods=['POST'])
 def loginPost():
     email = request.form.get('email')
     senha = request.form.get('password')
@@ -76,7 +77,7 @@ def loginPost():
     if user:
         return redirect('/index.html')
     else:
-        return render_template('login.html', error="Email ou senha incorretos")
+        return render_template('/login.html', error="Email ou senha incorretos")
     
 
 @app.route('/cadastroItens')
@@ -106,6 +107,6 @@ def cadastroItensPost():
 
 @app.route('/index.html')
 def index():
-    return render_template('index.html')
+    return render_template('/index.html')
 
   
