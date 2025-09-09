@@ -63,7 +63,7 @@ def cadastroPost():
 def login():
     return render_template('login.html')
 
-
+@app.route('/login', methods=['POST'])
 def loginPost():
     email = request.form.get('email')
     senha = request.form.get('password')
