@@ -85,6 +85,10 @@
             border-top: 4px solid #f39c12;
         }
 
+        .catalogo {
+            border-top: 4px solid #830583;
+        }
+
         @media (max-width: 600px) {
             .container {
                 padding: 20px;
