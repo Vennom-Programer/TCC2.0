@@ -59,11 +59,11 @@ def cadastroPost():
     return redirect('/login')
 
 # Rota para tela de login
-@app.route('/login')
+@app.route('/login',)
 def login():
     return render_template('login.html')
 
-
+@app.route('/login', methods=['POST'])
 def loginPost():
     email = request.form.get('email')
     senha = request.form.get('password')
@@ -122,3 +122,13 @@ def calendario():
     for d in range(1, total_days + 1):
         disponibilidade[d] = 'disponivel' if d % 2 == 0 else 'indisponivel'
     return render_template('calendario.html', disponibilidade=disponibilidade, year=year, month=month)
+
+@app.route('/catalogo.html', methods=['GET', 'POST'])
+def catalogo():
+    cursor = mydb.cursor()
+    query = "SELECT Nome, id_classificacao, descricao, quantidade, id_localizacao, especificacoestec FROM itens"
+    cursor.execute(query)
+    itens = cursor.fetchall()
+    cursor.close()
+    return render_template('catalogo.html', itens=itens)
+
