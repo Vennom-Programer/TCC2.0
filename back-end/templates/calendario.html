@@ -1,16 +1,16 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
- <link rel="stylesheet" href="{{url_for('static', filename='css/calendario.css')}}">
-<title>Calendário de Disponibilidade</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <link rel="stylesheet" href="{{url_for('static', filename='css/calendario.css')}}">
+  <title>Calendário de Disponibilidade</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
   <div class="calendar-container" role="application" aria-label="Calendário de disponibilidade de recursos">
     <header>
-      <h1 id="monthYear">{{ month }}/{{ year }}</h1>
+      <h1 id="monthYear"></h1>
     </header>
     <div class="weekdays" role="row" aria-label="Dias da semana">
       <div role="columnheader">Dom</div>
@@ -21,27 +21,29 @@
       <div role="columnheader">Sex</div>
       <div role="columnheader">Sáb</div>
     </div>
-    <div class="days" id="calendarDays" role="grid" aria-readonly="true">
-      {% set today = namespace(day=1) %}
-      {% for i in range(0, (disponibilidade|length + 7) // 7 * 7) %}
-        {% if i < (disponibilidade|length + today.day - 1) %}
-          {% if i < today.day - 1 %}
-            <div class="empty"></div>
-          {% else %}
-            {% set d = i - today.day + 2 %}
-            {% if disponibilidade[d] == 'disponivel' %}
-              <div class="day available" title="Disponível">{{ d }}</div>
-            {% else %}
-              <div class="day unavailable" title="Indisponível">{{ d }}</div>
-            {% endif %}
-          {% endif %}
-        {% endif %}
-      {% endfor %}
-    </div>
+    <div class="days" id="calendarDays" role="grid" aria-readonly="true"></div>
     <div class="legend" aria-label="Legenda dos recursos">
-      <div class="legend-item"><div class="legend-icon available"></div>Disponível</div>
-      <div class="legend-item"><div class="legend-icon unavailable"></div>Indisponível</div>
+      <div class="legend-item"><div class="legend-icon available"></div>Dia útil disponível</div>
+      <div class="legend-item"><div class="legend-icon inactive"></div>Final de semana</div>
+    </div>
+    <div id="reserva-modal" class="reserva-modal" style="display:none;">
+      <div class="reserva-modal-content">
+        <span id="fechar-modal" class="fechar-modal" onclick="fecharReserva()">&times;</span>
+        <h2>Reserva para o dia <span id="diaReserva"></span> (<span id="semanaReserva"></span>)</h2>
+        <form>
+          <label>Escolha o tipo:</label>
+          <select id="tipoReserva">
+            <option value="item">Item</option>
+            <option value="espaco">Espaço</option>
+          </select>
+          <div id="opcoesReserva" >
+            <!-- Opções de itens ou espaços serão exibidas aqui -->
+          </div>
+          <button type="submit">Reservar</button>
+        </form>
+      </div>
     </div>
   </div>
+  <script src="{{url_for('static', filename='js/calendario.js')}}"></script>
 </body>
 </html>

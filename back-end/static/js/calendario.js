@@ -120,81 +120,74 @@
 
   })();
 
-  document.addEventListener('DOMContentLoaded', function () {
-    const monthYear = document.getElementById('monthYear');
-    const calendarDays = document.getElementById('calendarDays');
+  // Funções utilitárias
+function formatDate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
 
-    // Função para obter o mês e ano atual
-    function getCurrentMonthYear() {
-        const today = new Date();
-        const month = today.toLocaleString('pt-BR', { month: 'long' });
-        const year = today.getFullYear();
-        return `${month.charAt(0).toUpperCase() + month.slice(1)} ${year}`;
-    }
-
-    // Função para gerar os dias do mês
-    function generateCalendar() {
-        const today = new Date();
-        const year = today.getFullYear();
-        const month = today.getMonth();
-        const firstDay = new Date(year, month, 1);
-        const lastDay = new Date(year, month + 1, 0);
-        const startDay = firstDay.getDay();
-        const totalDays = lastDay.getDate();
-
-        calendarDays.innerHTML = '';
-        for (let i = 0; i < startDay; i++) {
-            const emptyCell = document.createElement('div');
-            emptyCell.classList.add('empty');
-            calendarDays.appendChild(emptyCell);
-        }
-        for (let d = 1; d <= totalDays; d++) {
-            const dayCell = document.createElement('div');
-            dayCell.classList.add('day');
-            dayCell.textContent = d;
-            // Exemplo de disponibilidade (alternando dias)
-            if (d % 2 === 0) {
-                dayCell.classList.add('available');
-                dayCell.title = 'Disponível';
-            } else {
-                dayCell.classList.add('unavailable');
-                dayCell.title = 'Indisponível';
-            }
-            calendarDays.appendChild(dayCell);
-        }
-    }
-
-    monthYear.textContent = getCurrentMonthYear();
-    generateCalendar();
-
-    // Botões dos dias úteis da semana
-    const diasSemana = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex'];
-    diasSemana.forEach(function(dia) {
-        const btn = document.querySelector('.weekday-btn[data-dia="' + dia.toLowerCase() + '"]');
-        if (btn) {
-            btn.addEventListener('click', function() {
-                mostrarItensSemana(dia);
-            });
-        }
-    });
-  });
-
-  function mostrarItensSemana(diaSemana) {
-    // Exemplo de itens disponíveis/indisponíveis
-    const itens = [
-        { nome: 'Projetor', status: 'Disponível' },
-        { nome: 'Notebook', status: 'Indisponível' },
-        { nome: 'Laboratório 1', status: 'Disponível' },
-        { nome: 'Auditório', status: 'Indisponível' }
-    ];
-    const lista = document.getElementById('itens-lista-semana');
-    lista.innerHTML = '';
-    itens.forEach(function(item) {
-        const li = document.createElement('li');
-        li.textContent = item.nome + ' - ' + item.status;
-        li.className = item.status === 'Disponível' ? 'disponivel' : 'indisponivel';
-        lista.appendChild(li);
-    });
-    document.getElementById('diaSemanaSelecionado').textContent = diaSemana;
-    document.getElementById('reserva-aba-semana').style.display = 'block';
+// Modal de reserva
+window.abrirReserva = function(dia, semana) {
+  document.getElementById('diaReserva').textContent = dia;
+  document.getElementById('semanaReserva').textContent = semana;
+  document.getElementById('reserva-modal').style.display = 'block';
+  atualizarOpcoes();
+}
+window.fecharReserva = function() {
+  document.getElementById('reserva-modal').style.display = 'none';
+}
+function atualizarOpcoes() {
+  var tipo = document.getElementById('tipoReserva').value;
+  var opcoesDiv = document.getElementById('opcoesReserva');
+  var opcoes = '';
+  if (tipo === 'item') {
+    opcoes = '<label>Escolha o item:</label><select><option>Projetor</option><option>Notebook</option><option>Microfone</option></select>';
+  } else {
+    opcoes = '<label>Escolha o espaço:</label><select><option>Laboratório 1</option><option>Auditório</option></select>';
   }
+  opcoesDiv.innerHTML = opcoes;
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  // Atualiza opções ao trocar tipo
+  var tipoReserva = document.getElementById('tipoReserva');
+  if (tipoReserva) {
+    tipoReserva.addEventListener('change', atualizarOpcoes);
+  }
+
+  // Construir calendário: apenas dias úteis com botão, finais de semana inativos
+  const calendarDays = document.getElementById('calendarDays');
+  const monthYear = document.getElementById('monthYear');
+  const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const startDay = firstDay.getDay();
+  const totalDays = lastDay.getDate();
+  monthYear.textContent = now.toLocaleDateString('pt-BR', {month: 'long', year: 'numeric'}).replace(/^./, c => c.toUpperCase());
+
+  calendarDays.innerHTML = '';
+  for (let i = 0; i < startDay; i++) {
+    const emptyCell = document.createElement('div');
+    emptyCell.classList.add('empty');
+    calendarDays.appendChild(emptyCell);
+  }
+  for (let d = 1; d <= totalDays; d++) {
+    const dateObj = new Date(year, month, d);
+    const weekDay = diasSemana[dateObj.getDay()];
+    const dayCell = document.createElement('div');
+    dayCell.classList.add('day');
+    if (['Seg', 'Ter', 'Qua', 'Qui', 'Sex'].includes(weekDay)) {
+      dayCell.classList.add('available');
+      dayCell.innerHTML = `${d} <button class='ver-itens-btn' onclick="abrirReserva('${d}', '${weekDay}')">Reservar</button>`;
+    } else {
+      dayCell.classList.add('inactive');
+      dayCell.textContent = d;
+    }
+    calendarDays.appendChild(dayCell);
+  }
+});

@@ -1,4 +1,3 @@
-
 from flask import Flask, render_template, request, redirect
 import mysql.connector
 
@@ -112,16 +111,7 @@ def index():
 
 @app.route('/calendario.html', methods=['GET', 'POST'])
 def calendario():
-    from datetime import datetime
-    import calendar
-    today = datetime.today()
-    year = today.year
-    month = today.month
-    total_days = calendar.monthrange(year, month)[1]
-    disponibilidade = {}
-    for d in range(1, total_days + 1):
-        disponibilidade[d] = 'disponivel' if d % 2 == 0 else 'indisponivel'
-    return render_template('calendario.html', disponibilidade=disponibilidade, year=year, month=month)
+    return render_template('calendario.html')
 
 @app.route('/catalogo.html', methods=['GET', 'POST'])
 def catalogo():
