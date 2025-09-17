@@ -1,17 +1,31 @@
 (function() {
     // Recursos para apresentar
-    const resources = [
+    const recursosLaboratorio = [
       'Laboratório informática',
       'Laboratório línguas',
       'Laboratório Matemática',
       'Laboratório de Física',
-      'Laboratório de Quimica',
-      'Auditório',
+      'Laboratório de Quimica'
+    ];
+    const recursosAuditorio = [
+      'Auditório'
+    ];
+    const recursosArquivos = [
       'Data-shows',
       'Microfones',
       'Notebooks',
       'Caixas de sons'
     ];
+    // Seleciona recursos conforme tipoReserva
+    let resources = recursosLaboratorio.concat(recursosAuditorio, recursosArquivos);
+    const tipoReservaSelecionado = localStorage.getItem('tipoReserva');
+    if (tipoReservaSelecionado === 'laboratorio') {
+      resources = recursosLaboratorio;
+    } else if (tipoReservaSelecionado === 'auditorio') {
+      resources = recursosAuditorio;
+    } else if (tipoReservaSelecionado === 'arquivos') {
+      resources = recursosArquivos;
+    }
 
     // Dados de disponibilidade simulados para o mês atual (exemplo)
     // Chave: 'YYYY-MM-DD'

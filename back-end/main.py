@@ -1,7 +1,8 @@
-from flask import Flask, render_template, request, redirect
+from flask import Flask, render_template, request, redirect, session, url_for
 import mysql.connector
 
 app = Flask(__name__)
+app.secret_key = 'sua_chave_secreta_aqui'
 
 
 mydb = mysql.connector.connect(
@@ -66,15 +67,14 @@ def login():
 def loginPost():
     email = request.form.get('email')
     senha = request.form.get('password')
-    
     cursor = mydb.cursor()
     query = "SELECT * FROM usuarios WHERE email = %s AND senha = %s"
     values = (email, senha)
     cursor.execute(query, values)
     user = cursor.fetchone()
     cursor.close()
-    
     if user:
+        session['usuario_logado'] = email
         return redirect('/index.html')
     else:
         return render_template('/login.html', error="Email ou senha incorretos")
@@ -116,9 +116,10 @@ def calendario():
 @app.route('/catalogo.html', methods=['GET', 'POST'])
 def catalogo():
     cursor = mydb.cursor()
-    query = "SELECT Nome, id_classificacao, descricao, quantidade, id_localizacao, especificacoestec FROM itens"
+    query = "SELECT Nome, quantidade, id FROM itens"
     cursor.execute(query)
     itens = cursor.fetchall()
     cursor.close()
     return render_template('catalogo.html', itens=itens)
+
 

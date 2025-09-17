@@ -3,24 +3,111 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catálogo de Recursos - Modo Administrador</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="{{url_for('static', filename='css/catalogo.css')}}">
-        <script src="{{url_for('static', filename='js/catalogo.js')}}"></script>
-    <title>Document</title>
+    <script src="{{url_for('static', filename='js/catalogo.js')}}"></script>
 </head>
-<body>
-    <table>
-        <tr>
-            <th>Nome</th>
-            <th>Quantidade</th>
-            <th>ID</th>
-        </tr>
+<body class="admin-mode">
+    <div class="admin-banner">
+        <i class="fas fa-user-shield"></i>
+        <span>Modo Administrador Ativo</span>
+    </div>
 
-        <tr>
-            <td></td>
-            <td></td>
-            <td></td>
-        </tr>
-    </table>
+    <a href="index.html" class="back-button">
+        <i class="fas fa-arrow-left"></i> Voltar ao Menu
+    </a>
+
+    <div class="container">
+        <h1>
+            <i class="fas fa-book-open"></i> Catálogo de Recursos
+        </h1>
+        
+        <div class="access-control">
+            <button class="access-btn admin-btn" id="adminMode">
+                <i class="fas fa-user-shield"></i> Modo Administrador
+            </button>
+            <button class="access-btn user-btn" id="userMode">
+                <i class="fas fa-user"></i> Modo Usuário
+            </button>
+        </div>
+
+        <div class="search-bar">
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" placeholder="Pesquisar recursos...">
+            </div>
+            <button class="add-button admin-only" id="addResource">
+                <i class="fas fa-plus"></i> Adicionar Recurso
+            </button>
+        </div>
+
+        <table class="catalog-table">
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th>Quantidade</th>
+                    <th>ID</th>
+                    <th class="admin-only">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Microscópio Óptico</td>
+                    <td>15</td>
+                    <td>LAB-001</td>
+                    <td class="actions admin-only">
+                        <button class="btn btn-edit">Editar</button>
+                        <button class="btn btn-delete">Excluir</button>
+                    </td>
+                </tr>
+                <tr>
+                    <td>Projetor Multimídia</td>
+                    <td>8</td>
+                    <td>AV-002</td>
+                    <td class="actions admin-only">
+                        <button class="btn btn-edit">Editar</button>
+                        <button class="btn btn-delete">Excluir</button>
+                    </td>
+                </tr>
+                <tr>
+                    <td>Computador i5</td>
+                    <td>25</td>
+                    <td>IT-003</td>
+                    <td class="actions admin-only">
+                        <button class="btn btn-edit">Editar</button>
+                        <button class="btn btn-delete">Excluir</button>
+                    </td>
+                </tr>
+                <tr>
+                    <td>Kit de Química</td>
+                    <td>12</td>
+                    <td>LAB-004</td>
+                    <td class="actions admin-only">
+                        <button class="btn btn-edit">Editar</button>
+                        <button class="btn btn-delete">Excluir</button>
+                    </td>
+                </tr>
+                <tr>
+                    <td>Tablet Educacional</td>
+                    <td>20</td>
+                    <td>IT-005</td>
+                    <td class="actions admin-only">
+                        <button class="btn btn-edit">Editar</button>
+                        <button class="btn btn-delete">Excluir</button>
+                    </td>
+                </tr>
+                <tr>
+                    <td>Impressora 3D</td>
+                    <td>3</td>
+                    <td>LAB-006</td>
+                    <td class="actions admin-only">
+                        <button class="btn btn-edit">Editar</button>
+                        <button class="btn btn-delete">Excluir</button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
 </body>
 </html>

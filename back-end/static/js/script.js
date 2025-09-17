@@ -6,16 +6,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
     laboratorioBtn.addEventListener('click', function (e) {
         e.preventDefault();
+        localStorage.setItem('tipoReserva', 'laboratorio');
         window.location.href = '/calendario.html';
     });
 
     auditorioBtn.addEventListener('click', function (e) {
         e.preventDefault();
+        localStorage.setItem('tipoReserva', 'auditorio');
         window.location.href = '/calendario.html';
     });
 
     arquivosBtn.addEventListener('click', function (e) {
         e.preventDefault();
+        localStorage.setItem('tipoReserva', 'arquivos');
         window.location.href = '/calendario.html';
     });
 
