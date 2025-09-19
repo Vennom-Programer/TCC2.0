@@ -2,7 +2,7 @@ const form = document.getElementById('loginForm');
 const errorDiv = document.getElementById('error');
 
 form.addEventListener('submit', function(e) {
-  e.preventDefault();
+  // Perform client-side validation, then allow normal POST so server verifies role against DB
   if (errorDiv) errorDiv.textContent = '';
 
   const email = form.email.value.trim();
@@ -11,12 +11,14 @@ form.addEventListener('submit', function(e) {
 
   if (!role) {
     if (errorDiv) errorDiv.textContent = 'Por favor, selecione se você é ADM ou Professor.';
+    e.preventDefault();
     return;
   }
 
   if (!email) {
     if (errorDiv) errorDiv.textContent = 'Por favor, informe seu e-mail.';
     form.email.focus();
+    e.preventDefault();
     return;
   }
   // Basic email pattern check
@@ -24,22 +26,17 @@ form.addEventListener('submit', function(e) {
   if (!emailPattern.test(email)) {
     if (errorDiv) errorDiv.textContent = 'Por favor, informe um e-mail válido.';
     form.email.focus();
+    e.preventDefault();
     return;
   }
   if (!password) {
     if (errorDiv) errorDiv.textContent = 'Por favor, informe sua senha.';
     form.password.focus();
+    e.preventDefault();
     return;
   }
 
-  // Em uma implementação real, envie role junto ao backend para autenticação.
-  // Aqui apenas salvamos role e email localmente após validações.
-  localStorage.setItem('usuarioLogado', email);
-  localStorage.setItem('usuarioRole', role);
-  if (window.showModal) {
-    showModal('Login realizado com sucesso!\nEmail: ' + email + '\nRole: ' + role);
-  } else {
-    alert('Login realizado com sucesso! Email: ' + email + '\nRole: ' + role);
-  }
-  form.reset();
+  // Do not store role/email locally here; submit the form and let the server validate role from DB.
+  // The server will return to the login page with an error message in case of mismatch.
+  // Allow the form to submit normally (no preventDefault).
 });

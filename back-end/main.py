@@ -13,6 +13,24 @@ mydb = mysql.connector.connect(
 )
 
 
+def get_user_role(email):
+    """Query the database for the given user's role. Returns the role string or None."""
+    try:
+        cursor = mydb.cursor()
+        cursor.execute("SELECT role FROM usuarios WHERE email = %s", (email,))
+        row = cursor.fetchone()
+        cursor.close()
+        if row:
+            return row[0]
+    except Exception:
+        # If role column doesn't exist or query fails, return None
+        try:
+            cursor.close()
+        except Exception:
+            pass
+    return None
+
+
 
 @app.route('/')
 def menu():
@@ -21,6 +39,15 @@ def menu():
 # Rota para tela de cadastro
 @app.route('/cadastro')
 def cadastro():
+    # Allow access to registration page for anonymous users (auto-register as professor)
+    # For logged-in users, ensure only admins may access the user-creation form
+    if session.get('usuario_logado'):
+        db_role = get_user_role(session.get('usuario_logado'))
+        if not db_role:
+            # If DB has no role info, fall back to session (legacy)
+            db_role = session.get('usuario_role')
+        if db_role and str(db_role).strip().lower() != 'adm':
+            return redirect('/?error=forbidden')
     return render_template('cadastro.html')
 
 # Rota para processar cadastro via POST
@@ -34,7 +61,13 @@ def cadastro_post():
 
     # Security: if a user is logged in but is not an admin, disallow creating new users
     # (prevents non-admins from creating users or assigning roles via forged requests)
-    current_role = session.get('usuario_role')
+    # Refresh current user's role from DB when possible to ensure authoritative permission checks
+    current_role = None
+    if session.get('usuario_logado'):
+        current_role = get_user_role(session.get('usuario_logado'))
+        # If DB doesn't have role info, fall back to session value (legacy)
+        if not current_role:
+            current_role = session.get('usuario_role')
     if session.get('usuario_logado') and current_role != 'adm':
         # Logged-in non-admins cannot create other users
         return redirect('/cadastro?error=forbidden')
@@ -104,49 +137,39 @@ def loginPost():
     email = request.form.get('email')
     senha = request.form.get('password')
     role = request.form.get('role')
+    # Strict verification: check credentials and obtain DB role in one query
     cursor = mydb.cursor()
-    db_role = None
-    user_found = False
-
-    # Try to get the user's role directly from the DB (strict verification)
     try:
         cursor.execute("SELECT role FROM usuarios WHERE email = %s AND senha = %s", (email, senha))
         row = cursor.fetchone()
-        if row:
-            db_role = row[0]
-            user_found = True
-    except mysql.connector.Error:
-        # Role column may not exist; we'll attempt a fallback to check credentials without role
+        cursor.close()
+    except Exception:
+        # Query failed; deny login (and avoid leaking details)
         try:
-            cursor.execute("SELECT 1 FROM usuarios WHERE email = %s AND senha = %s", (email, senha))
-            if cursor.fetchone():
-                user_found = True
-                db_role = None
+            cursor.close()
         except Exception:
-            user_found = False
+            pass
+        return render_template('login.html', error="Erro ao verificar credenciais. Tente novamente mais tarde.")
 
-    cursor.close()
-
-    if not user_found:
+    if not row:
+        # No matching user/password
         return render_template('login.html', error="Email ou senha incorretos")
 
-    # If a role was submitted in the form, require it to match the stored DB role
+    db_role = row[0]
+
+    # If a role was submitted in the form, require it to match the stored DB role (case-insensitive)
     if role:
-        if db_role is None:
-            # Can't verify role because DB does not have role column
+        if not db_role:
             return render_template('login.html', error="Verificação de função indisponível no servidor. Contate o administrador.")
-        if role != db_role:
+        if role.strip().lower() != str(db_role).strip().lower():
             return render_template('login.html', error="As credenciais não correspondem ao tipo selecionado.")
 
-    # Authentication and role verification passed -> set session role from DB when available
+    # Authentication and role verification passed -> set session role from DB (authoritative)
     session['usuario_logado'] = email
-    if db_role:
-        session['usuario_role'] = db_role
-    elif role:
-        # If DB didn't provide a role but user submitted one (unlikely after migration), trust submitted
-        session['usuario_role'] = role
+    session['usuario_role'] = db_role
 
-    return redirect('/index.html')
+    # Redirect to the shared index page; the template will show content based on session role
+    return redirect(url_for('index'))
     
 
 @app.route('/cadastroItens')
@@ -176,7 +199,13 @@ def cadastroItensPost():
 
 @app.route('/index.html', methods=['GET', 'POST'])
 def index():
-    return render_template('/index.html')
+    # Render the shared index template which will show/hide elements based on session role
+    # Refresh the session role from DB for the logged user to keep it authoritative
+    if session.get('usuario_logado'):
+        db_role = get_user_role(session.get('usuario_logado'))
+        if db_role:
+            session['usuario_role'] = db_role
+    return render_template('index.html')
 
 @app.route('/calendario.html', methods=['GET', 'POST'])
 def calendario():

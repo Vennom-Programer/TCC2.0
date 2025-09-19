@@ -37,6 +37,13 @@
                 <h2>Catálogo</h2>
                 <p>Acesso ao inventário</p>
             </a>
+            {% if session.get('usuario_role') == 'adm' %}
+            <a href="/cadastro" class="menu-button admin-manage">
+                <i class="fas fa-user-cog"></i>
+                <h2>Gerenciar Usuários</h2>
+                <p>Crie e gerencie contas</p>
+            </a>
+            {% endif %}
         </div>
     </div>
 </body>
