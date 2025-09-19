@@ -5,7 +5,6 @@
      <link rel="stylesheet" href="{{url_for('static', filename='css/cadastro.css')}}">
     <title>Cadastro</title>
      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-     <script src="{{url_for('static', filename='js/cadastro.js')}}"></script>
 </head>
 <body>
     <div class="cadastro-container">
@@ -27,12 +26,28 @@
                 <label for="numeroDaMatricula">Número da Matricula</label>
                 <input type="password" id="numeroDaMatricula" name="numeroDaMatricula" required>
             </div>
+            {% if session.get('usuario_role') == 'adm' %}
+            <div class="form-group">
+                <label>Tipo de usuário</label>
+                <div class="role-options">
+                    <label><input type="radio" name="role" value="adm"> ADM</label>
+                    <label><input type="radio" name="role" value="professor" checked> Professor</label>
+                </div>
+                <small>O ADM pode marcar se o novo usuário também será ADM ou um Professor.</small>
+            </div>
+            {% endif %}
             <button class="cadastro-btn" type="submit">Cadastrar</button>
         </form>
+
+        <div class="actions">
+            <a href="{{ url_for('menu') }}" class="voltar-btn">&larr; Voltar ao Menu</a>
+        </div>
+
         <div id="mensagem"></div>
     </div>
 
 
-    <script src="cadastro.js"></script>
+    <script src="{{ url_for('static', filename='js/modal.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/cadastro.js') }}"></script>
 </body>
-</html></div>
+</html>
