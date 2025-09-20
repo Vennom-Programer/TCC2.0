@@ -8,13 +8,8 @@
     <link rel="stylesheet" href="{{url_for('static', filename='css/catalogo.css')}}">
     <script src="{{url_for('static', filename='js/catalogo.js')}}"></script>
 </head>
-<body class="admin-mode">
-    <div class="admin-banner">
-        <i class="fas fa-user-shield"></i>
-        <span>Modo Administrador Ativo</span>
-    </div>
-
-    <a href="index.html" class="back-button">
+<body>
+    <a href="menu.html" class="back-button">
         <i class="fas fa-arrow-left"></i> Voltar ao Menu
     </a>
 
@@ -35,7 +30,7 @@
         <div class="search-bar">
             <div class="search-box">
                 <i class="fas fa-search"></i>
-                <input type="text" placeholder="Pesquisar recursos...">
+                <input type="text" id="searchInput" placeholder="Pesquisar recursos...">
             </div>
             <button class="add-button admin-only" id="addResource">
                 <i class="fas fa-plus"></i> Adicionar Recurso
@@ -51,13 +46,13 @@
                     <th class="admin-only">Ações</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="resourcesTable">
                 <tr>
                     <td>Microscópio Óptico</td>
                     <td>15</td>
                     <td>LAB-001</td>
                     <td class="actions admin-only">
-                        <button class="btn btn-edit">Editar</button>
+                        <button class="btn btn-edit" data-id="LAB-001">Editar</button>
                         <button class="btn btn-delete">Excluir</button>
                     </td>
                 </tr>
@@ -66,7 +61,7 @@
                     <td>8</td>
                     <td>AV-002</td>
                     <td class="actions admin-only">
-                        <button class="btn btn-edit">Editar</button>
+                        <button class="btn btn-edit" data-id="AV-002">Editar</button>
                         <button class="btn btn-delete">Excluir</button>
                     </td>
                 </tr>
@@ -75,39 +70,11 @@
                     <td>25</td>
                     <td>IT-003</td>
                     <td class="actions admin-only">
-                        <button class="btn btn-edit">Editar</button>
-                        <button class="btn btn-delete">Excluir</button>
-                    </td>
-                </tr>
-                <tr>
-                    <td>Kit de Química</td>
-                    <td>12</td>
-                    <td>LAB-004</td>
-                    <td class="actions admin-only">
-                        <button class="btn btn-edit">Editar</button>
-                        <button class="btn btn-delete">Excluir</button>
-                    </td>
-                </tr>
-                <tr>
-                    <td>Tablet Educacional</td>
-                    <td>20</td>
-                    <td>IT-005</td>
-                    <td class="actions admin-only">
-                        <button class="btn btn-edit">Editar</button>
-                        <button class="btn btn-delete">Excluir</button>
-                    </td>
-                </tr>
-                <tr>
-                    <td>Impressora 3D</td>
-                    <td>3</td>
-                    <td>LAB-006</td>
-                    <td class="actions admin-only">
-                        <button class="btn btn-edit">Editar</button>
+                        <button class="btn btn-edit" data-id="IT-003">Editar</button>
                         <button class="btn btn-delete">Excluir</button>
                     </td>
                 </tr>
             </tbody>
         </table>
     </div>
-</body>
 </html>
