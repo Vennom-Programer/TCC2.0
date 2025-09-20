@@ -14,8 +14,6 @@
         {% if session.get('usuario_logado') %}
         <div class="top-actions" style="text-align:right; margin-bottom:10px;">
                 {% if session.get('usuario_role') and session.get('usuario_role')|lower == 'adm' %}
-            <a href="/usuarios" class="top-link" title="Usuários"><i class="fas fa-users"></i></a>
-            <a href="/relatorios" class="top-link" title="Relatórios"><i class="fas fa-chart-line"></i></a>
             {% endif %}
             <a href="/logout" class="logout-button">Sair</a>
         </div>
@@ -24,10 +22,6 @@
 
             {% if session.get('usuario_role') and session.get('usuario_role')|lower == 'adm' %}
         <!-- Admin view -->
-        <div class="admin-shortcuts" style="display:flex; gap:10px; justify-content:center; margin-bottom:18px;">
-            <a href="/usuarios" class="shortcut-button"><i class="fas fa-users"></i> Usuários</a>
-        </div>
-
         <div class="menu-buttons">
             <a href="/usuarios" class="menu-card admin-manage">
                 <div class="card-icon"><i class="fas fa-user-cog"></i></div>
