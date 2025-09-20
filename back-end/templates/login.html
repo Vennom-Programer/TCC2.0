@@ -27,6 +27,23 @@
 
   <script src="{{ url_for('static', filename='js/modal.js') }}"></script>
   <script src="{{ url_for('static', filename='js/login.js') }}"></script>
+  {% if error %}
+  <!-- Store server error in a data attribute to avoid embedding raw JSON in JS -->
+  <div id="server-error" data-error="{{ error|e }}" style="display:none"></div>
+  <script>
+    window.addEventListener('DOMContentLoaded', function () {
+      var el = document.getElementById('server-error');
+      if (!el) return;
+      var msg = el.getAttribute('data-error');
+      if (!msg) return;
+      if (window.showModal) {
+        showModal(msg);
+      } else {
+        alert(msg);
+      }
+    });
+  </script>
+  {% endif %}
 </body>
 </html>
 </content>

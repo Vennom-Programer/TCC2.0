@@ -31,6 +31,29 @@ def get_user_role(email):
     return None
 
 
+def require_admin_or_redirect():
+    """Helper used in routes to ensure the current session user is an admin. Returns None if OK or a redirect response."""
+    if not session.get('usuario_logado'):
+        return redirect('/login')
+    db_role = get_user_role(session.get('usuario_logado'))
+    if not db_role:
+        db_role = session.get('usuario_role')
+    if str(db_role).strip().lower() != 'adm':
+        return redirect('/?error=forbidden')
+    return None
+
+
+def require_login_or_redirect():
+    """Ensure a user is logged in; if not, redirect to /login. Refreshes session role from DB."""
+    if not session.get('usuario_logado'):
+        return redirect('/login')
+    # refresh authoritative role from DB when possible
+    db_role = get_user_role(session.get('usuario_logado'))
+    if db_role:
+        session['usuario_role'] = db_role
+    return None
+
+
 
 @app.route('/')
 def menu():
@@ -162,7 +185,7 @@ def loginPost():
         if not db_role:
             return render_template('login.html', error="Verificação de função indisponível no servidor. Contate o administrador.")
         if role.strip().lower() != str(db_role).strip().lower():
-            return render_template('login.html', error="As credenciais não correspondem ao tipo selecionado.")
+            return render_template('login.html', error="Você escolheu o tipo de usuário errado.")
 
     # Authentication and role verification passed -> set session role from DB (authoritative)
     session['usuario_logado'] = email
@@ -174,11 +197,17 @@ def loginPost():
 
 @app.route('/cadastroItens')
 def cadastroItens():
+    check = require_login_or_redirect()
+    if check:
+        return check
     return render_template('cadastroItem.html')
 
 
 @app.route('/cadastroItens', methods=['POST'])
 def cadastroItensPost():
+    check = require_login_or_redirect()
+    if check:
+        return check
     nomeItem = request.form.get('item-name')
     tipoItem = request.form.get('item-type')
     descricao = request.form.get('item-description')
@@ -199,20 +228,50 @@ def cadastroItensPost():
 
 @app.route('/index.html', methods=['GET', 'POST'])
 def index():
-    # Render the shared index template which will show/hide elements based on session role
-    # Refresh the session role from DB for the logged user to keep it authoritative
-    if session.get('usuario_logado'):
-        db_role = get_user_role(session.get('usuario_logado'))
-        if db_role:
-            session['usuario_role'] = db_role
+    # Require login to view the index menu
+    check = require_login_or_redirect()
+    if check:
+        return check
     return render_template('index.html')
+
+
+@app.route('/logout')
+def logout():
+    # Clear user session and redirect to login
+    session.pop('usuario_logado', None)
+    session.pop('usuario_role', None)
+    return redirect('/login')
 
 @app.route('/calendario.html', methods=['GET', 'POST'])
 def calendario():
+    check = require_login_or_redirect()
+    if check:
+        return check
     return render_template('calendario.html')
+
+
+@app.route('/relatorios')
+def relatorios():
+    # Only admins can access reports
+    check = require_admin_or_redirect()
+    if check:
+        return check
+    return render_template('relatorios.html')
+
+
+@app.route('/usuarios')
+def usuarios():
+    # Admin-only user management view
+    check = require_admin_or_redirect()
+    if check:
+        return check
+    return render_template('usuarios.html')
 
 @app.route('/catalogo.html', methods=['GET', 'POST'])
 def catalogo():
+    check = require_login_or_redirect()
+    if check:
+        return check
     cursor = mydb.cursor()
     query = "SELECT Nome, quantidade, id FROM itens"
     cursor.execute(query)

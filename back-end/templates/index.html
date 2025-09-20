@@ -11,40 +11,77 @@
 </head>
 <body>
     <div class="container">
-        <h1>Sistema de Agendamento</h1>
-        
-        <div class="menu-buttons">
-            <a href="#" class="menu-button laboratorio">
-                <i class="fas fa-flask"></i>
-                <h2 class="labs">Laboratórios</h2>
-                <p>Agende equipamentos e espaços para pesquisa</p>
-            </a>
-            
-            <a href="#" class="menu-button auditorio">
-                <i class="fas fa-chalkboard-teacher"></i>
-                <h2>Auditório</h2>
-                <p>Reserve para palestras e eventos acadêmicos</p>
-            </a>
-            
-            <a href="#" class="menu-button arquivos">
-                <i class="fas fa-book"></i>
-                <h2>Arquivos Educacionais</h2>
-                <p>Acesse materiais didáticos e documentos</p>
-            </a>
-
-            <a href="#" class="menu-button catalogo">
-                <i class="fas fa-book-open"></i>
-                <h2>Catálogo</h2>
-                <p>Acesso ao inventário</p>
-            </a>
-            {% if session.get('usuario_role') == 'adm' %}
-            <a href="/cadastro" class="menu-button admin-manage">
-                <i class="fas fa-user-cog"></i>
-                <h2>Gerenciar Usuários</h2>
-                <p>Crie e gerencie contas</p>
-            </a>
+        {% if session.get('usuario_logado') %}
+        <div class="top-actions" style="text-align:right; margin-bottom:10px;">
+                {% if session.get('usuario_role') and session.get('usuario_role')|lower == 'adm' %}
+            <a href="/usuarios" class="top-link" title="Usuários"><i class="fas fa-users"></i></a>
+            <a href="/relatorios" class="top-link" title="Relatórios"><i class="fas fa-chart-line"></i></a>
             {% endif %}
+            <a href="/logout" class="logout-button">Sair</a>
         </div>
+        {% endif %}
+        <h1>Sistema de Agendamento</h1>
+
+            {% if session.get('usuario_role') and session.get('usuario_role')|lower == 'adm' %}
+        <!-- Admin view -->
+        <div class="admin-shortcuts" style="display:flex; gap:10px; justify-content:center; margin-bottom:18px;">
+            <a href="/usuarios" class="shortcut-button"><i class="fas fa-users"></i> Usuários</a>
+            <a href="/relatorios" class="shortcut-button"><i class="fas fa-chart-line"></i> Relatórios</a>
+        </div>
+
+        <div class="menu-buttons">
+            <a href="/usuarios" class="menu-card admin-manage">
+                <div class="card-icon"><i class="fas fa-user-cog"></i></div>
+                <div class="card-body"><h2>Gerenciar Usuários</h2><p>Crie e gerencie contas</p></div>
+            </a>
+            <a href="/cadastro" class="menu-card criar-usuario">
+                <div class="card-icon"><i class="fas fa-user-plus"></i></div>
+                <div class="card-body"><h2>Criar Usuário</h2><p>Adicionar nova conta</p></div>
+            </a>
+            <a href="/calendario.html" class="menu-card calendario-admin">
+                <div class="card-icon"><i class="fas fa-calendar-alt"></i></div>
+                <div class="card-body"><h2>Calendário</h2><p>Visualizar calendário geral</p></div>
+            </a>
+            <a href="/relatorios" class="menu-card admin-reports">
+                <div class="card-icon"><i class="fas fa-chart-line"></i></div>
+                <div class="card-body"><h2>Relatórios</h2><p>Visualize uso e estatísticas</p></div>
+            </a>
+            <a href="/catalogo.html" class="menu-card catalogo">
+                <div class="card-icon"><i class="fas fa-book-open"></i></div>
+                <div class="card-body"><h2>Catálogo</h2><p>Acesso ao inventário</p></div>
+            </a>
+        </div>
+
+            {% elif session.get('usuario_role') and session.get('usuario_role')|lower == 'professor' %}
+        <!-- Professor view -->
+        <div class="menu-buttons">
+            <a href="/calendario.html" class="menu-card minhas-reservas">
+                <div class="card-icon"><i class="fas fa-calendar-check"></i></div>
+                <div class="card-body"><h2>Minhas Reservas</h2><p>Veja e gerencie suas reservas</p></div>
+            </a>
+            <a href="/calendario.html" class="menu-card novo-agendamento">
+                <div class="card-icon"><i class="fas fa-plus-circle"></i></div>
+                <div class="card-body"><h2>Novo Agendamento</h2><p>Agende um laboratório ou espaço</p></div>
+            </a>
+            <a href="/catalogo.html" class="menu-card catalogo">
+                <div class="card-icon"><i class="fas fa-book-open"></i></div>
+                <div class="card-body"><h2>Catálogo</h2><p>Acesso ao inventário</p></div>
+            </a>
+        </div>
+
+        {% else %}
+        <!-- Guest view -->
+        <div class="menu-buttons">
+            <a href="/login" class="menu-card login-cta">
+                <div class="card-icon"><i class="fas fa-sign-in-alt"></i></div>
+                <div class="card-body"><h2>Entrar</h2><p>Faça login para acessar o sistema</p></div>
+            </a>
+            <a href="/catalogo.html" class="menu-card catalogo">
+                <div class="card-icon"><i class="fas fa-book-open"></i></div>
+                <div class="card-body"><h2>Catálogo</h2><p>Veja o inventário disponível</p></div>
+            </a>
+        </div>
+        {% endif %}
     </div>
 </body>
 </html>
