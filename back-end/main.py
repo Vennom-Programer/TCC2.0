@@ -99,6 +99,17 @@ def cadastro_post():
     if role and current_role != 'adm':
         return redirect('/cadastro?error=forbidden')
 
+    # If the requester is an admin and is trying to create another admin, require admin password confirmation
+    if current_role == 'adm' and role and str(role).strip().lower() == 'adm':
+        admin_password = request.form.get('admin_password')
+        # Verify the admin_password matches the logged-in admin's password stored in DB
+        cursor_check = mydb.cursor()
+        cursor_check.execute("SELECT senha FROM usuarios WHERE email = %s", (session.get('usuario_logado'),))
+        row = cursor_check.fetchone()
+        cursor_check.close()
+        if not row or row[0] != admin_password:
+            return redirect('/cadastro?error=admin_auth_failed')
+
     # If requester is not logged in (auto-registration), force the new account to be a Professor
     if not session.get('usuario_logado'):
         role = 'professor'
@@ -195,7 +206,7 @@ def loginPost():
     return redirect(url_for('index'))
     
 
-@app.route('/cadastroItens')
+@app.route('/cadastroItem.html', methods=['GET'])
 def cadastroItens():
     check = require_login_or_redirect()
     if check:
@@ -203,7 +214,7 @@ def cadastroItens():
     return render_template('cadastroItem.html')
 
 
-@app.route('/cadastroItens', methods=['POST'])
+@app.route('/cadastroItem.html', methods=['POST'])
 def cadastroItensPost():
     check = require_login_or_redirect()
     if check:

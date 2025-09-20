@@ -2,13 +2,14 @@ document.addEventListener('DOMContentLoaded', function () {
     const form = document.getElementById('cadastroForm');
     if (!form) return;
 
-     form.addEventListener('submit', function (e) {
-        const nome = document.getElementById('nome').value.trim();
-        const email = document.getElementById('email').value.trim();
-        const senha = document.getElementById('senha').value;
-        const numeroDaMatricula = document.getElementById('numeroDaMatricula').value;
+      form.addEventListener('submit', function (e) {
+          const mensagemDiv = document.getElementById('mensagem');
+          const nome = document.getElementById('nome').value.trim();
+          const email = document.getElementById('email').value.trim();
+          const senha = document.getElementById('senha').value;
+          const numeroDaMatricula = document.getElementById('numeroDaMatricula').value;
         // role radios may be present only when an admin is creating the user
-        const roleInputs = document.getElementsByName('role');
+    const roleInputs = document.getElementsByName('role');
         let selectedRole = null;
         if (roleInputs && roleInputs.length) {
             for (let i = 0; i < roleInputs.length; i++) {
@@ -23,8 +24,24 @@ document.addEventListener('DOMContentLoaded', function () {
                 mensagemDiv.style.color = 'red';
                 return;
             }
+            // admin password visibility is handled by radio change listener as well; ensure state here too
+            const adminAuth = document.getElementById('admin-auth');
+            if (adminAuth) {
+                adminAuth.style.display = (selectedRole === 'adm') ? 'block' : 'none';
+            }
         }
-        const mensagemDiv = document.getElementById('mensagem');
+
+
+        // If creating an ADM, ensure admin password field is provided
+        if (selectedRole === 'adm') {
+            const adminPass = document.getElementById('admin_password');
+            if (!adminPass || !adminPass.value) {
+                e.preventDefault();
+                mensagemDiv.textContent = 'Por favor, confirme a senha do ADM para criar outro ADM.';
+                mensagemDiv.style.color = 'red';
+                return;
+            }
+        }
 
         if (!nome || !email || !senha || !numeroDaMatricula) {
             e.preventDefault();
@@ -34,6 +51,18 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         mensagemDiv.textContent = '';
     });
+
+    // Toggle admin password input immediately when admin radio is selected
+    const roleInputsLive = document.getElementsByName('role');
+    if (roleInputsLive && roleInputsLive.length) {
+        const adminAuth = document.getElementById('admin-auth');
+        for (let i = 0; i < roleInputsLive.length; i++) {
+            roleInputsLive[i].addEventListener('change', function () {
+                if (!adminAuth) return;
+                adminAuth.style.display = (this.value === 'adm' && this.checked) ? 'block' : 'none';
+            });
+        }
+    }
 });
 
 // Mostrar pop-up quando ?success=1 estiver presente na URL
@@ -78,6 +107,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     if (params.get('error') === '1') {
         showModal('Erro ao cadastrar. Tente novamente mais tarde.');
+        const url = new URL(window.location);
+        url.searchParams.delete('error');
+        window.history.replaceState({}, '', url.pathname + url.search);
+    }
+    if (params.get('error') === 'admin_auth_failed') {
+        showModal('Autenticação do ADM falhou: senha incorreta.');
         const url = new URL(window.location);
         url.searchParams.delete('error');
         window.history.replaceState({}, '', url.pathname + url.search);

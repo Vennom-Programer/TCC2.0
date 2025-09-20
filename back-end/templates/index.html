@@ -27,10 +27,6 @@
                 <div class="card-icon"><i class="fas fa-user-cog"></i></div>
                 <div class="card-body"><h2>Gerenciar Usuários</h2><p>Crie e gerencie contas</p></div>
             </a>
-            <a href="/cadastro" class="menu-card criar-usuario">
-                <div class="card-icon"><i class="fas fa-user-plus"></i></div>
-                <div class="card-body"><h2>Criar Usuário</h2><p>Adicionar nova conta</p></div>
-            </a>
             <a href="/calendario.html" class="menu-card calendario-admin">
                 <div class="card-icon"><i class="fas fa-calendar-alt"></i></div>
                 <div class="card-body"><h2>Calendário</h2><p>Visualizar calendário geral</p></div>
@@ -40,6 +36,11 @@
                 <div class="card-icon"><i class="fas fa-book-open"></i></div>
                 <div class="card-body"><h2>Catálogo</h2><p>Acesso ao inventário</p></div>
             </a>
+            <a href="/cadastroItem.html" class="menu-card cadastroItem">
+                <div class="card-icon"><i class="fas fa-plus-circle"></i></div>
+                <div class="card-body"><h2>Cadastrar Item</h2><p>Adicionar novo recurso ao catálogo</p></div>
+            </a>
+
         </div>
 
             {% elif session.get('usuario_role') and session.get('usuario_role')|lower == 'professor' %}

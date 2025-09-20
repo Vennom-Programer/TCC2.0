@@ -26,7 +26,7 @@
                 <label for="numeroDaMatricula">Número da Matricula</label>
                 <input type="password" id="numeroDaMatricula" name="numeroDaMatricula" required>
             </div>
-            {% if session.get('usuario_role') == 'adm' %}
+            {% if session.get('usuario_role') and session.get('usuario_role')|lower == 'adm' %}
             <div class="form-group">
                 <label>Tipo de usuário</label>
                 <div class="role-options">
@@ -35,12 +35,17 @@
                 </div>
                 <small>O ADM pode marcar se o novo usuário também será ADM ou um Professor.</small>
             </div>
+            <div class="form-group" id="admin-auth" style="display:none;">
+                <label for="admin_password">Confirme sua senha de ADM</label>
+                <input type="password" id="admin_password" name="admin_password" placeholder="Senha do ADM para confirmar" />
+                <small>Para criar outro ADM, confirme sua própria senha.</small>
+            </div>
             {% endif %}
             <button class="cadastro-btn" type="submit">Cadastrar</button>
         </form>
 
         <div class="actions">
-            <a href="{{ url_for('menu') }}" class="voltar-btn">&larr; Voltar ao Menu</a>
+            <a href="{{ url_for('index') }}" class="voltar-btn">&larr; Voltar ao Menu</a>
         </div>
 
         <div id="mensagem"></div>
