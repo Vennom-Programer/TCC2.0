@@ -1,142 +1,472 @@
-/* Reset */
 * {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-  }
-  body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(to right, #0066cc, #66ccff);
-    color: #333;
-    display: flex;
-    justify-content: center;
-    padding: 10px;
-    min-height: 100vh;
-  }
-  .calendar-container {
-    background: #fff;
-    border-radius: 12px;
-    padding: 15px;
-    width: 100%;
-    max-width: 600px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-    user-select: none;
-  }
-  header {
-    text-align: center;
-    margin-bottom: 10px;
-  }
-  header h1 {
-    font-size: 1.6rem;
-    color: #004080;
-  }
-  .weekdays {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    font-weight: bold;
-    color: #004080;
-    margin-bottom: 6px;
-  }
-  .weekdays div {
-    text-align: center;
-    padding: 6px 0;
-  }
-  .days {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 6px;
-  }
-  .day {
-    border-radius: 8px;
-    background: #e6f0ff;
-    padding: 6px 4px 4px 4px;
-    min-height: 70px;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    cursor: default;
-    box-shadow: inset 0 0 5px rgba(0,0,0,0.05);
-    transition: background-color 0.3s ease;
-  }
-  .day.inactive {
-    background: #f3f3f3;
-    color: #bbb;
-    border: 1px solid #e0e0e0;
-    cursor: not-allowed;
-    opacity: 0.7;
-  }
-  .day:hover:not(.inactive) {
-    background-color: #99ccff;
-  }
-  .day-number {
-    font-weight: 700;
-    margin-bottom: 6px;
-    font-size: 1rem;
-    color: #003366;
-  }
-  .resource-list {
-    flex-grow: 1;
-    overflow-y: auto;
-    font-size: 0.75rem;
-    line-height: 1.1;
-  }
-  .resource {
-    display: flex;
-    align-items: center;
-    margin-bottom: 2px;
-  }
-  .resource span {
-    margin-left: 5px;
-  }
-  .resource.available {
-    color: #2e7d32;
-    font-weight: 600;
-  }
-  .resource.unavailable {
-    color: #c62828;
-    font-weight: 400;
-    text-decoration: line-through;
-  }
-  /* Legend */
-  .legend {
-    margin-top: 12px;
-    font-size: 0.8rem;
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 12px;
-  }
-  .legend-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .legend-icon {
-    width: 14px;
-    height: 14px;
-    border-radius: 3px;
-  }
-  .legend-icon.available {
-    background-color: #55a7ea;
-  }
-  .legend-icon.unavailable {
-    background-color: #c62828;
-  }
-  .legend-icon.inactive {
-    background: #f3f3f3;
-    border: 1px solid #e0e0e0;
-  }
-  /* Scroll styling for mobile */
-  .resource-list::-webkit-scrollbar {
-    width: 4px;
-  }
-  .resource-list::-webkit-scrollbar-thumb {
-    background-color: #004080cc;
-    border-radius: 2px;
-  }
-  @media (max-width: 400px) {
-    .day {
-      min-height: 80px;
-      font-size: 0.65rem;
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
-  }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(to right, #0066cc, #66ccff);
+      color: #333;
+      display: flex;
+      justify-content: center;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    
+    .calendar-container {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px;
+      width: 100%;
+      max-width: 600px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+      user-select: none;
+    }
+    
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 15px;
+    }
+    
+    .back-button {
+      padding: 8px 12px;
+      background-color: #9b59b6;
+      color: white;
+      text-decoration: none;
+      border-radius: 5px;
+      transition: all 0.3s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    
+    .back-button:hover {
+      background-color: #8e44ad;
+      transform: translateY(-2px);
+    }
+    
+    h1 {
+      font-size: 1.6rem;
+      color: #004080;
+    }
+    
+    .weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      font-weight: bold;
+      color: #004080;
+      margin-bottom: 8px;
+    }
+    
+    .weekdays div {
+      text-align: center;
+      padding: 8px 0;
+    }
+    
+    .days {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 8px;
+    }
+    
+    .day {
+      border-radius: 8px;
+      background: #e6f0ff;
+      padding: 8px;
+      min-height: 60px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      cursor: pointer;
+      box-shadow: inset 0 0 5px rgba(0,0,0,0.05);
+      transition: all 0.3s ease;
+    }
+    
+    .day.inactive {
+      background: #f3f3f3;
+      color: #bbb;
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+    
+    .day.available:hover {
+      background-color: #99ccff;
+      transform: translateY(-2px);
+    }
+    
+    .day.has-reservations {
+      background: #fff9e6;
+      border: 1px solid #ffd966;
+    }
+    
+    .day.selected {
+      background-color: #9b59b6;
+      color: white;
+    }
+    
+    .day-number {
+      font-weight: 700;
+      font-size: 1rem;
+      color: #003366;
+      text-align: center;
+    }
+    
+    .day.selected .day-number {
+      color: white;
+    }
+    
+    .day-reservations {
+      text-align: center;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 2px 4px;
+      border-radius: 4px;
+      margin-top: 4px;
+      background-color: #4caf50;
+      color: white;
+    }
+    
+    .legend {
+      margin-top: 15px;
+      font-size: 0.8rem;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
+    }
+    
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .legend-icon {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+    }
+    
+    .legend-icon.available {
+      background-color: #4caf50;
+    }
+    
+    .legend-icon.reserved {
+      background-color: #ff9800;
+    }
+    
+    .legend-icon.inactive {
+      background: #f3f3f3;
+      border: 1px solid #e0e0e0;
+    }
+    
+    /* Modal de Horários */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.7);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .time-slots-modal {
+      background: #fff;
+      border-radius: 12px;
+      padding: 25px;
+      width: 90%;
+      max-width: 550px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 2px solid #e6f0ff;
+    }
+    
+    .modal-header h2 {
+      font-size: 1.5rem;
+      color: #004080;
+    }
+    
+    .close-modal {
+      background: none;
+      border: none;
+      font-size: 1.8rem;
+      cursor: pointer;
+      color: #666;
+      transition: color 0.3s ease;
+    }
+    
+    .close-modal:hover {
+      color: #0066cc;
+    }
+    
+    .resource-selection {
+      margin-bottom: 20px;
+      padding: 15px;
+      background: #f9f9f9;
+      border-radius: 8px;
+    }
+    
+    .resource-selection h3 {
+      color: #004080;
+      margin-bottom: 15px;
+    }
+    
+    .resource-type {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 15px;
+    }
+    
+    .resource-option {
+      flex: 1;
+      padding: 10px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    
+    .resource-option.selected {
+      border-color: #9b59b6;
+      background-color: #f0e6f5;
+    }
+    
+    .resource-option i {
+      font-size: 1.5rem;
+      margin-bottom: 8px;
+      color: #7f8c8d;
+    }
+    
+    .resource-option.selected i {
+      color: #9b59b6;
+    }
+    
+    .resource-items {
+      display: none;
+    }
+    
+    .resource-items.visible {
+      display: block;
+    }
+    
+    .resource-items select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      font-size: 1rem;
+    }
+    
+    .time-period {
+      margin-bottom: 25px;
+    }
+    
+    .time-period h3 {
+      color: #004080;
+      margin-bottom: 15px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #e6f0ff;
+    }
+    
+    .time-slots {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .time-slot {
+      display: flex;
+      align-items: center;
+      padding: 15px;
+      border-radius: 8px;
+      background: #e6f0ff;
+      transition: all 0.3s ease;
+      cursor: pointer;
+      box-shadow: inset 0 0 5px rgba(0,0,0,0.05);
+    }
+    
+    .time-slot:hover {
+      background-color: #cce5ff;
+      transform: translateY(-2px);
+    }
+    
+    .time-slot.reserved {
+      background-color: #ffd966;
+    }
+    
+    .time-slot.selected {
+      background-color: #9b59b6;
+      color: white;
+    }
+    
+    .time-slot.to-cancel {
+      background-color: #ffebee;
+      border: 1px solid #e57373;
+    }
+    
+    .time-slot-number {
+      min-width: 50px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: #004080;
+      padding: 5px 10px;
+      background: white;
+      border-radius: 6px;
+      margin-right: 15px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .time-slot.reserved .time-slot-number,
+    .time-slot.selected .time-slot-number,
+    .time-slot.to-cancel .time-slot-number {
+      background: #8e44ad;
+      color: white;
+    }
+    
+    .time-range {
+      flex-grow: 1;
+      font-size: 1rem;
+    }
+    
+    .time-slot.reserved .time-range,
+    .time-slot.selected .time-range,
+    .time-slot.to-cancel .time-range {
+      color: white;
+    }
+    
+    .time-slot-status {
+      padding: 5px 10px;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    
+    .status-available {
+      background-color: #4caf50;
+      color: white;
+    }
+    
+    .status-reserved {
+      background-color: #f57c00;
+      color: white;
+    }
+    
+    .status-to-cancel {
+      background-color: #f44336;
+      color: white;
+    }
+    
+    .action-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    
+    .reserve-button, .cancel-button {
+      flex: 1;
+      padding: 15px;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-weight: bold;
+      font-size: 1.1rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    
+    .reserve-button {
+      background-color: #2ecc71;
+    }
+    
+    .reserve-button:hover {
+      background-color: #27ae60;
+      transform: translateY(-2px);
+    }
+    
+    .reserve-button:disabled {
+      background-color: #bdc3c7;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .cancel-button {
+      background-color: #e74c3c;
+    }
+    
+    .cancel-button:hover {
+      background-color: #c0392b;
+      transform: translateY(-2px);
+    }
+    
+    .cancel-button:disabled {
+      background-color: #bdc3c7;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .cancel-mode-active {
+      background-color: #3498db !important;
+    }
+    
+    .reservation-details {
+      margin-top: 15px;
+      padding: 15px;
+      background: #f9f9f9;
+      border-radius: 8px;
+      font-size: 0.9rem;
+    }
+    
+    .reservation-details div {
+      margin-bottom: 5px;
+    }
+    
+    @media (max-width: 500px) {
+      .calendar-container {
+        padding: 15px;
+      }
+      
+      .day {
+        min-height: 50px;
+        padding: 6px;
+      }
+      
+      .time-slots-modal {
+        padding: 15px;
+      }
+      
+      .time-slot {
+        padding: 12px;
+      }
+      
+      .time-slot-number {
+        min-width: 40px;
+        font-size: 1rem;
+        margin-right: 10px;
+      }
+      
+      .action-buttons {
+        flex-direction: column;
+      }
+      
+      .resource-type {
+        flex-direction: column;
+      }
+    }

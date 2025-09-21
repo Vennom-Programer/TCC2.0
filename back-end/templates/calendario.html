@@ -13,6 +13,13 @@
       <a href="/index.html" class="back-button">&larr; Voltar ao Menu</a>
       <h1 id="monthYear"></h1>
     </header>
+    <body>
+  <div class="calendar-container" role="application" aria-label="Calendário de disponibilidade de recursos">
+    <header>
+      <a href="/index.html" class="back-button"><i class="fas fa-arrow-left"></i> Voltar</a>
+      <h1 id="monthYear">Junho 2023</h1>
+    </header>
+    
     <div class="weekdays" role="row" aria-label="Dias da semana">
       <div role="columnheader">Dom</div>
       <div role="columnheader">Seg</div>
@@ -22,26 +29,94 @@
       <div role="columnheader">Sex</div>
       <div role="columnheader">Sáb</div>
     </div>
-    <div class="days" id="calendarDays" role="grid" aria-readonly="true"></div>
+    
+    <div class="days" id="calendarDays" role="grid" aria-readonly="true">
+      <!-- Os dias serão gerados pelo JavaScript -->
+    </div>
+    
     <div class="legend" aria-label="Legenda dos recursos">
-      <div class="legend-item"><div class="legend-icon available"></div>Dia útil disponível</div>
+      <div class="legend-item"><div class="legend-icon available"></div>Dia disponível</div>
+      <div class="legend-item"><div class="legend-icon reserved"></div>Dia com reservas</div>
       <div class="legend-item"><div class="legend-icon inactive"></div>Final de semana</div>
     </div>
-    <div id="reserva-modal" class="reserva-modal" style="display:none;">
-      <div class="reserva-modal-content">
-        <span id="fechar-modal" class="fechar-modal" onclick="fecharReserva()">&times;</span>
-        <h2>Reserva para o dia <span id="diaReserva"></span> (<span id="semanaReserva"></span>)</h2>
-        <form>
-          <label>Escolha o tipo:</label>
-          <select id="tipoReserva">
-            <option value="item">Item</option>
-            <option value="espaco">Espaço</option>
-          </select>
-          <div id="opcoesReserva" >
-            <!-- Opções de itens ou espaços serão exibidas aqui -->
+  </div>
+
+  <!-- Modal de Horários -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="time-slots-modal">
+      <div class="modal-header">
+        <h2 id="modalTitle">Horários para <span id="selectedDate"></span></h2>
+        <button class="close-modal" id="closeModal">&times;</button>
+      </div>
+      
+      <div class="resource-selection">
+        <h3>Selecione o tipo de recurso:</h3>
+        <div class="resource-type">
+          <div class="resource-option" data-type="item">
+            <i class="fas fa-laptop"></i>
+            <div>Item</div>
           </div>
-          <button type="submit">Reservar</button>
-        </form>
+          <div class="resource-option" data-type="space">
+            <i class="fas fa-building"></i>
+            <div>Espaço</div>
+          </div>
+        </div>
+        
+        <div class="resource-items" id="itemOptions">
+          <select id="itemSelect">
+            <option value="">Selecione um item</option>
+            <option value="projetor">Projetor Multimídia</option>
+            <option value="notebook">Notebook</option>
+            <option value="microfone">Microfone</option>
+            <option value="caixa-som">Caixa de Som</option>
+            <option value="tablet">Tablet</option>
+          </select>
+        </div>
+        
+        <div class="resource-items" id="spaceOptions">
+          <select id="spaceSelect">
+            <option value="">Selecione um espaço</option>
+            <option value="lab-info">Laboratório de Informática</option>
+            <option value="lab-quimica">Laboratório de Química</option>
+            <option value="lab-fisica">Laboratório de Física</option>
+            <option value="auditorio">Auditório</option>
+            <option value="sala-reuniao">Sala de Reunião</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="time-period">
+        <h3>Período da Manhã</h3>
+        <div class="time-slots" id="morningSlots">
+          <!-- Horários da manhã serão gerados pelo JavaScript -->
+        </div>
+      </div>
+      
+      <div class="time-period">
+        <h3>Período da Tarde</h3>
+        <div class="time-slots" id="afternoonSlots">
+          <!-- Horários da tarde serão gerados pelo JavaScript -->
+        </div>
+      </div>
+      
+      <div class="time-period">
+        <h3>Período da Noite</h3>
+        <div class="time-slots" id="eveningSlots">
+          <!-- Horários da noite serão gerados pelo JavaScript -->
+        </div>
+      </div>
+      
+      <div class="reservation-details" id="reservationDetails">
+        <!-- Detalhes da reserva serão exibidos aqui -->
+      </div>
+      
+      <div class="action-buttons">
+        <button class="reserve-button" id="reserveButton">
+          <i class="fas fa-calendar-check"></i> Reservar
+        </button>
+        <button class="cancel-button" id="cancelButton">
+          <i class="fas fa-times-circle"></i> Cancelar Reservas
+        </button>
       </div>
     </div>
   </div>

@@ -1,207 +1,507 @@
-(function() {
-    // Recursos para apresentar
-    const recursosLaboratorio = [
-      'Laboratório informática',
-      'Laboratório línguas',
-      'Laboratório Matemática',
-      'Laboratório de Física',
-      'Laboratório de Quimica'
-    ];
-    const recursosAuditorio = [
-      'Auditório'
-    ];
-    const recursosArquivos = [
-      'Data-shows',
-      'Microfones',
-      'Notebooks',
-      'Caixas de sons'
-    ];
-    // Seleciona recursos conforme tipoReserva
-    let resources = recursosLaboratorio.concat(recursosAuditorio, recursosArquivos);
-    const tipoReservaSelecionado = localStorage.getItem('tipoReserva');
-    if (tipoReservaSelecionado === 'laboratorio') {
-      resources = recursosLaboratorio;
-    } else if (tipoReservaSelecionado === 'auditorio') {
-      resources = recursosAuditorio;
-    } else if (tipoReservaSelecionado === 'arquivos') {
-      resources = recursosArquivos;
-    }
-
-    // Dados de disponibilidade simulados para o mês atual (exemplo)
-    // Chave: 'YYYY-MM-DD'
-    // Valor: objeto com recurso: true/false (disponível/não disponível)
-    const availabilityData = {
-      // Exemplo alguns dias
-      // Ajuste para dias do mês atual
-    };
-
-    // Função para formatar date para yyyy-mm-dd
-    function formatDate(date) {
-      const y = date.getFullYear();
-      const m = String(date.getMonth()+1).padStart(2,'0');
-      const d = String(date.getDate()).padStart(2,'0');
-      return `${y}-${m}-${d}`;
-    }
-
-    // Gerar dados aleatórios estáticos para o exemplo para o mês atual
-    function generateExampleData(year, month) {
-      const data = {};
-      const daysInMonth = new Date(year, month+1, 0).getDate();
-      for(let day=1; day <= daysInMonth; day++) {
-        const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-        data[dateStr] = {};
-        resources.forEach(r=>{
-          // Aleatório disponível 70%/30%
-          data[dateStr][r] = Math.random() < 0.7;
-        });
+document.addEventListener('DOMContentLoaded', function() {
+      const calendarDays = document.getElementById('calendarDays');
+      const monthYearElement = document.getElementById('monthYear');
+      const modalOverlay = document.getElementById('modalOverlay');
+      const modalTitle = document.getElementById('modalTitle');
+      const selectedDateElement = document.getElementById('selectedDate');
+      const morningSlots = document.getElementById('morningSlots');
+      const afternoonSlots = document.getElementById('afternoonSlots');
+      const eveningSlots = document.getElementById('eveningSlots');
+      const reserveButton = document.getElementById('reserveButton');
+      const cancelButton = document.getElementById('cancelButton');
+      const closeModal = document.getElementById('closeModal');
+      const itemOptions = document.getElementById('itemOptions');
+      const spaceOptions = document.getElementById('spaceOptions');
+      const itemSelect = document.getElementById('itemSelect');
+      const spaceSelect = document.getElementById('spaceSelect');
+      const reservationDetails = document.getElementById('reservationDetails');
+      const resourceOptions = document.querySelectorAll('.resource-option');
+      
+      let currentDate = new Date();
+      let currentMonth = currentDate.getMonth();
+      let currentYear = currentDate.getFullYear();
+      let selectedDay = null;
+      let selectedDateKey = null;
+      let isCancelMode = false;
+      let selectedResourceType = null;
+      let selectedResource = null;
+      
+      // Nomes dos meses
+      const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", 
+                         "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+      
+      // Dias da semana
+      const dayNames = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", 
+                       "Quinta-feira", "Sexta-feira", "Sábado"];
+      
+      // Horários conforme especificado
+      const morningSchedule = [
+        { number: '1º', start: '07:30', end: '08:20', key: '1' },
+        { number: '2º', start: '08:20', end: '09:10', key: '2' },
+        { number: '3º', start: '09:40', end: '10:20', key: '3' },
+        { number: '4º', start: '10:20', end: '11:10', key: '4' },
+        { number: '5º', start: '11:10', end: '12:00', key: '5' }
+      ];
+      
+      const afternoonSchedule = [
+        { number: '6º', start: '13:30', end: '14:20', key: '6' },
+        { number: '7º', start: '14:20', end: '15:00', key: '7' },
+        { number: '8º', start: '15:30', end: '16:10', key: '8' },
+        { number: '9º', start: '16:10', end: '17:00', key: '9' }
+      ];
+      
+      const eveningSchedule = [
+        { number: '10º', start: '19:30', end: '20:20', key: '10' },
+        { number: '11º', start: '20:20', end: '21:10', key: '11' },
+        { number: '12º', start: '21:10', end: '22:00', key: '12' }
+      ];
+      
+      // Mapeamento de recursos para nomes amigáveis
+      const resourceNames = {
+        'projetor': 'Projetor Multimídia',
+        'notebook': 'Notebook',
+        'microfone': 'Microfone',
+        'caixa-som': 'Caixa de Som',
+        'tablet': 'Tablet',
+        'lab-info': 'Laboratório de Informática',
+        'lab-quimica': 'Laboratório de Química',
+        'lab-fisica': 'Laboratório de Física',
+        'auditorio': 'Auditório',
+        'sala-reuniao': 'Sala de Reunião'
+      };
+      
+      // Obter reservas do localStorage ou inicializar objeto vazio
+      function getReservations() {
+        const reservations = localStorage.getItem('reservations');
+        return reservations ? JSON.parse(reservations) : {};
       }
-      return data;
-    }
-
-    // Construir calendário
-    function buildCalendar(year, month) {
-      const daysContainer = document.getElementById('calendarDays');
-      daysContainer.innerHTML = '';
-
-      const firstDay = new Date(year, month, 1);
-      const lastDay = new Date(year, month+1, 0);
-      const monthYearText = firstDay.toLocaleDateString('pt-BR', {month: 'long', year: 'numeric'});
-      document.getElementById('monthYear').textContent = monthYearText[0].toUpperCase() + monthYearText.slice(1);
-
-      // Quantidade de dias no mês
-      const daysInMonth = lastDay.getDate();
-      // Qual dia da semana começa (0=Domingo, 6=Sábado)
-      const startWeekDay = firstDay.getDay();
-
-      // Dias anteriores do mês para preencher a grade (dias do mês anterior)
-      // Para simplicidade, preenchimento com bloco vazio sem número
-      for (let i=0; i < startWeekDay; i++) {
-        const emptyCell = document.createElement('div');
-        emptyCell.classList.add('day','inactive');
-        emptyCell.setAttribute('aria-hidden','true');
-        daysContainer.appendChild(emptyCell);
+      
+      // Salvar reservas no localStorage
+      function saveReservations(reservations) {
+        localStorage.setItem('reservations', JSON.stringify(reservations));
       }
-
-      // Dias do mês atual
-      for(let day = 1; day <= daysInMonth; day++) {
-        const dateObj = new Date(year, month, day);
-        const dateStr = formatDate(dateObj);
-
-        const dayCell = document.createElement('div');
-        dayCell.classList.add('day');
-        dayCell.setAttribute('role', 'gridcell');
-        dayCell.setAttribute('aria-label', `Dia ${day}`);
-
-        // Número do dia
-        const dayNumber = document.createElement('div');
-        dayNumber.classList.add('day-number');
-        dayNumber.textContent = day;
-        dayCell.appendChild(dayNumber);
-
-        // Lista recursos e disponibilidade
-        const resourceList = document.createElement('div');
-        resourceList.classList.add('resource-list');
-
-        const availability = availabilityData[dateStr];
-        resources.forEach(r => {
-          const resDiv = document.createElement('div');
-          resDiv.classList.add('resource');
-          if(availability && availability[r] === true){
-            resDiv.classList.add('available');
-            resDiv.textContent = "✓ " + r;
+      
+      // Função para formatar a chave da data
+      function getDateKey(day, month, year) {
+        return `${year}-${month + 1}-${day}`;
+      }
+      
+      // Função para gerar o calendário
+      function generateCalendar() {
+        calendarDays.innerHTML = '';
+        monthYearElement.textContent = `${monthNames[currentMonth]} ${currentYear}`;
+        
+        // Obter o primeiro dia do mês
+        const firstDay = new Date(currentYear, currentMonth, 1);
+        const startingDay = firstDay.getDay(); // 0 (Domingo) a 6 (Sábado)
+        
+        // Obter o último dia do mês
+        const lastDay = new Date(currentYear, currentMonth + 1, 0);
+        const daysInMonth = lastDay.getDate();
+        
+        // Obter reservas
+        const reservations = getReservations();
+        
+        // Preencher os dias vazios no início do mês
+        for (let i = 0; i < startingDay; i++) {
+          const emptyDay = document.createElement('div');
+          emptyDay.classList.add('day', 'inactive');
+          calendarDays.appendChild(emptyDay);
+        }
+        
+        // Preencher os dias do mês
+        for (let day = 1; day <= daysInMonth; day++) {
+          const dayElement = document.createElement('div');
+          const dayOfWeek = new Date(currentYear, currentMonth, day).getDay();
+          const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+          
+          dayElement.classList.add('day');
+          
+          if (isWeekend) {
+            dayElement.classList.add('inactive');
           } else {
-            resDiv.classList.add('unavailable');
-            resDiv.textContent = "✗ " + r;
+            const dateKey = getDateKey(day, currentMonth, currentYear);
+            const dayReservations = reservations[dateKey];
+            const hasReservations = dayReservations && Object.values(dayReservations).some(r => r.reserved);
+            
+            if (hasReservations) {
+              dayElement.classList.add('has-reservations');
+              const reservationCount = dayReservations ? Object.values(dayReservations).filter(r => r.reserved).length : 0;
+              dayElement.innerHTML = `
+                <div class="day-number">${day}</div>
+                <div class="day-reservations">${reservationCount} reserva(s)</div>
+              `;
+            } else {
+              dayElement.classList.add('available');
+              dayElement.innerHTML = `
+                <div class="day-number">${day}</div>
+              `;
+            }
+            
+            dayElement.addEventListener('click', () => selectDay(dayElement, day, dayOfWeek));
           }
-          resourceList.appendChild(resDiv);
-        });
-
-        dayCell.appendChild(resourceList);
-
-        daysContainer.appendChild(dayCell);
+          
+          calendarDays.appendChild(dayElement);
+        }
       }
-    }
-
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
-
-    // Gerar dados para o mês atual e armazenar globalmente
-    Object.assign(availabilityData, generateExampleData(currentYear, currentMonth));
-
-    // Construir calendário
-    buildCalendar(currentYear, currentMonth);
-
-  })();
-
-  // Funções utilitárias
-function formatDate(date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-// Modal de reserva
-window.abrirReserva = function(dia, semana) {
-  document.getElementById('diaReserva').textContent = dia;
-  document.getElementById('semanaReserva').textContent = semana;
-  document.getElementById('reserva-modal').style.display = 'block';
-  atualizarOpcoes();
-}
-window.fecharReserva = function() {
-  document.getElementById('reserva-modal').style.display = 'none';
-}
-function atualizarOpcoes() {
-  var tipo = document.getElementById('tipoReserva').value;
-  var opcoesDiv = document.getElementById('opcoesReserva');
-  var opcoes = '';
-  if (tipo === 'item') {
-    opcoes = '<label>Escolha o item:</label><select><option>Projetor</option><option>Notebook</option><option>Microfone</option></select>';
-  } else {
-    opcoes = '<label>Escolha o espaço:</label><select><option>Laboratório 1</option><option>Auditório</option></select>';
-  }
-  opcoesDiv.innerHTML = opcoes;
-}
-
-document.addEventListener('DOMContentLoaded', function () {
-  // Atualiza opções ao trocar tipo
-  var tipoReserva = document.getElementById('tipoReserva');
-  if (tipoReserva) {
-    tipoReserva.addEventListener('change', atualizarOpcoes);
-  }
-
-  // Construir calendário: apenas dias úteis com botão, finais de semana inativos
-  const calendarDays = document.getElementById('calendarDays');
-  const monthYear = document.getElementById('monthYear');
-  const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  const firstDay = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0);
-  const startDay = firstDay.getDay();
-  const totalDays = lastDay.getDate();
-  monthYear.textContent = now.toLocaleDateString('pt-BR', {month: 'long', year: 'numeric'}).replace(/^./, c => c.toUpperCase());
-
-  calendarDays.innerHTML = '';
-  for (let i = 0; i < startDay; i++) {
-    const emptyCell = document.createElement('div');
-    emptyCell.classList.add('empty');
-    calendarDays.appendChild(emptyCell);
-  }
-  for (let d = 1; d <= totalDays; d++) {
-    const dateObj = new Date(year, month, d);
-    const weekDay = diasSemana[dateObj.getDay()];
-    const dayCell = document.createElement('div');
-    dayCell.classList.add('day');
-    if (['Seg', 'Ter', 'Qua', 'Qui', 'Sex'].includes(weekDay)) {
-      dayCell.classList.add('available');
-      dayCell.innerHTML = `${d} <button class='ver-itens-btn' onclick="abrirReserva('${d}', '${weekDay}')">Reservar</button>`;
-    } else {
-      dayCell.classList.add('inactive');
-      dayCell.textContent = d;
-    }
-    calendarDays.appendChild(dayCell);
-  }
-});
+      
+      // Função para selecionar um dia
+      function selectDay(dayElement, day, dayOfWeek) {
+        // Remover seleção anterior
+        if (selectedDay) {
+          selectedDay.classList.remove('selected');
+        }
+        
+        // Definir nova seleção
+        dayElement.classList.add('selected');
+        selectedDay = dayElement;
+        
+        // Guardar a chave da data selecionada
+        selectedDateKey = getDateKey(day, currentMonth, currentYear);
+        
+        // Mostrar o modal com os horários
+        const formattedDate = `${day} de ${monthNames[currentMonth]} de ${currentYear}`;
+        
+        selectedDateElement.textContent = formattedDate;
+        modalTitle.textContent = `Horários para ${formattedDate}`;
+        
+        // Sair do modo de cancelamento ao selecionar novo dia
+        isCancelMode = false;
+        updateCancelButton();
+        
+        // Limpar seleções de recursos
+        clearResourceSelection();
+        
+        // Gerar os horários
+        generateTimeSlots();
+        
+        // Mostrar o modal
+        modalOverlay.style.display = 'flex';
+      }
+      
+      // Limpar seleção de recursos
+      function clearResourceSelection() {
+        resourceOptions.forEach(option => {
+          option.classList.remove('selected');
+        });
+        itemOptions.classList.remove('visible');
+        spaceOptions.classList.remove('visible');
+        itemSelect.value = '';
+        spaceSelect.value = '';
+        selectedResourceType = null;
+        selectedResource = null;
+        updateReservationDetails();
+      }
+      
+      // Função para gerar os horários de aula
+      function generateTimeSlots() {
+        morningSlots.innerHTML = '';
+        afternoonSlots.innerHTML = '';
+        eveningSlots.innerHTML = '';
+        
+        // Obter reservas
+        const reservations = getReservations();
+        const dayReservations = reservations[selectedDateKey] || {};
+        
+        // Gerar horários da manhã
+        morningSchedule.forEach(slot => {
+          const reservation = dayReservations[slot.key];
+          const isReserved = reservation && reservation.reserved;
+          const timeSlot = createTimeSlotElement(slot, isReserved, reservation);
+          morningSlots.appendChild(timeSlot);
+        });
+        
+        // Gerar horários da tarde
+        afternoonSchedule.forEach(slot => {
+          const reservation = dayReservations[slot.key];
+          const isReserved = reservation && reservation.reserved;
+          const timeSlot = createTimeSlotElement(slot, isReserved, reservation);
+          afternoonSlots.appendChild(timeSlot);
+        });
+        
+        // Gerar horários da noite
+        eveningSchedule.forEach(slot => {
+          const reservation = dayReservations[slot.key];
+          const isReserved = reservation && reservation.reserved;
+          const timeSlot = createTimeSlotElement(slot, isReserved, reservation);
+          eveningSlots.appendChild(timeSlot);
+        });
+        
+        // Atualizar o estado dos botões
+        updateButtonStates();
+      }
+      
+      // Função para criar elemento de horário
+      function createTimeSlotElement(slot, isReserved, reservation) {
+        const timeSlot = document.createElement('div');
+        timeSlot.classList.add('time-slot');
+        timeSlot.dataset.slotKey = slot.key;
+        
+        if (isReserved) {
+          timeSlot.classList.add('reserved');
+          let reservedText = 'Reservado';
+          if (reservation && reservation.resourceType && reservation.resource) {
+            reservedText = `Reservado (${resourceNames[reservation.resource]})`;
+          }
+          
+          timeSlot.innerHTML = `
+            <div class="time-slot-number">${slot.number}</div>
+            <div class="time-range">${slot.start} às ${slot.end}</div>
+            <div class="time-slot-status status-reserved">${reservedText}</div>
+          `;
+          
+          // Adicionar evento de clique para modo de cancelamento
+          timeSlot.addEventListener('click', function() {
+            if (isCancelMode) {
+              this.classList.toggle('to-cancel');
+              updateButtonStates();
+            }
+          });
+        } else {
+          timeSlot.innerHTML = `
+            <div class="time-slot-number">${slot.number}</div>
+            <div class="time-range">${slot.start} às ${slot.end}</div>
+            <div class="time-slot-status status-available">Disponível</div>
+          `;
+          
+          // Adicionar evento de clique apenas se não estiver no modo de cancelamento
+          if (!isCancelMode) {
+            timeSlot.addEventListener('click', function() {
+              this.classList.toggle('selected');
+              updateButtonStates();
+              updateReservationDetails();
+            });
+          }
+        }
+        
+        return timeSlot;
+      }
+      
+      // Atualizar detalhes da reserva
+      function updateReservationDetails() {
+        const selectedSlots = document.querySelectorAll('.time-slot.selected');
+        
+        if (selectedSlots.length === 0 || !selectedResource) {
+          reservationDetails.innerHTML = 'Selecione os horários e um recurso para ver os detalhes da reserva.';
+          return;
+        }
+        
+        const selectedTimes = Array.from(selectedSlots).map(slot => {
+          return slot.querySelector('.time-range').textContent;
+        });
+        
+        reservationDetails.innerHTML = `
+          <div><strong>Recurso:</strong> ${resourceNames[selectedResource]}</div>
+          <div><strong>Horários selecionados:</strong></div>
+          <div>${selectedTimes.join(', ')}</div>
+        `;
+      }
+      
+      // Função para atualizar o estado dos botões
+      function updateButtonStates() {
+        if (isCancelMode) {
+          const selectedToCancel = document.querySelectorAll('.time-slot.to-cancel');
+          cancelButton.disabled = selectedToCancel.length === 0;
+          reserveButton.disabled = true;
+        } else {
+          const selectedSlots = document.querySelectorAll('.time-slot.selected');
+          const canReserve = selectedSlots.length > 0 && selectedResource;
+          
+          reserveButton.disabled = !canReserve;
+          
+          // Verificar se há reservas para este dia
+          const reservations = getReservations();
+          const dayReservations = reservations[selectedDateKey] || {};
+          const hasReservations = Object.keys(dayReservations).length > 0;
+          
+          cancelButton.disabled = !hasReservations;
+        }
+      }
+      
+      // Atualizar aparência do botão de cancelamento
+      function updateCancelButton() {
+        if (isCancelMode) {
+          cancelButton.innerHTML = '<i class="fas fa-times"></i> Confirmar Cancelamento';
+          cancelButton.classList.add('cancel-mode-active');
+        } else {
+          cancelButton.innerHTML = '<i class="fas fa-times-circle"></i> Cancelar Reservas';
+          cancelButton.classList.remove('cancel-mode-active');
+        }
+      }
+      
+      // Selecionar tipo de recurso
+      resourceOptions.forEach(option => {
+        option.addEventListener('click', function() {
+          const type = this.dataset.type;
+          
+          // Desselecionar outros recursos
+          resourceOptions.forEach(opt => opt.classList.remove('selected'));
+          
+          // Selecionar este recurso
+          this.classList.add('selected');
+          selectedResourceType = type;
+          
+          // Mostrar opções apropriadas
+          if (type === 'item') {
+            itemOptions.classList.add('visible');
+            spaceOptions.classList.remove('visible');
+            spaceSelect.value = '';
+          } else {
+            spaceOptions.classList.add('visible');
+            itemOptions.classList.remove('visible');
+            itemSelect.value = '';
+          }
+          
+          updateButtonStates();
+        });
+      });
+      
+      // Selecionar item específico
+      itemSelect.addEventListener('change', function() {
+        selectedResource = this.value;
+        updateButtonStates();
+        updateReservationDetails();
+      });
+      
+      // Selecionar espaço específico
+      spaceSelect.addEventListener('change', function() {
+        selectedResource = this.value;
+        updateButtonStates();
+        updateReservationDetails();
+      });
+      
+      // Alternar entre modos de reserva e cancelamento
+      cancelButton.addEventListener('click', function() {
+        const reservations = getReservations();
+        const dayReservations = reservations[selectedDateKey] || {};
+        const hasReservations = Object.keys(dayReservations).length > 0;
+        
+        if (!hasReservations) {
+          alert('Não há reservas para cancelar neste dia.');
+          return;
+        }
+        
+        if (!isCancelMode) {
+          // Entrar no modo de cancelamento
+          isCancelMode = true;
+          updateCancelButton();
+          
+          // Desselecionar quaisquer horários selecionados para reserva
+          document.querySelectorAll('.time-slot.selected').forEach(slot => {
+            slot.classList.remove('selected');
+          });
+        } else {
+          // Processar cancelamento - encontrar horários selecionados para cancelar
+          const selectedToCancel = document.querySelectorAll('.time-slot.to-cancel');
+          
+          if (selectedToCancel.length === 0) {
+            alert('Selecione pelo menos um horário para cancelar.');
+            return;
+          }
+          
+          // Confirmar cancelamento
+          if (confirm(`Tem certeza que deseja cancelar ${selectedToCancel.length} reserva(s)?`)) {
+            // Processar cancelamento
+            selectedToCancel.forEach(slot => {
+              const slotKey = slot.dataset.slotKey;
+              if (reservations[selectedDateKey] && reservations[selectedDateKey][slotKey]) {
+                delete reservations[selectedDateKey][slotKey];
+              }
+            });
+            
+            // Se não há mais reservas para este dia, remover a entrada
+            if (reservations[selectedDateKey] && Object.keys(reservations[selectedDateKey]).length === 0) {
+              delete reservations[selectedDateKey];
+            }
+            
+            // Salvar reservas atualizadas
+            saveReservations(reservations);
+            
+            alert('Reserva(s) cancelada(s) com sucesso!');
+            
+            // Atualizar o calendário e horários
+            generateCalendar();
+            generateTimeSlots();
+          }
+          
+          // Sair do modo de cancelamento
+          isCancelMode = false;
+          updateCancelButton();
+        }
+        
+        updateButtonStates();
+      });
+      
+      // Fechar o modal
+      closeModal.addEventListener('click', function() {
+        closeModalHandler();
+      });
+      
+      // Fechar o modal clicando fora dele
+      modalOverlay.addEventListener('click', function(e) {
+        if (e.target === modalOverlay) {
+          closeModalHandler();
+        }
+      });
+      
+      // Função para fechar o modal
+      function closeModalHandler() {
+        modalOverlay.style.display = 'none';
+        
+        // Limpar seleções e modos
+        document.querySelectorAll('.time-slot.selected, .time-slot.to-cancel').forEach(slot => {
+          slot.classList.remove('selected', 'to-cancel');
+        });
+        
+        isCancelMode = false;
+        updateCancelButton();
+        clearResourceSelection();
+      }
+      
+      // Adicionar evento de clique ao botão de reserva
+      reserveButton.addEventListener('click', function() {
+        const selectedSlots = document.querySelectorAll('.time-slot.selected');
+        const selectedTimes = Array.from(selectedSlots).map(slot => {
+          return slot.querySelector('.time-range').textContent;
+        });
+        
+        if (!selectedResource) {
+          alert('Por favor, selecione um recurso para reservar.');
+          return;
+        }
+        
+        // Obter reservas atuais
+        const reservations = getReservations();
+        
+        // Inicializar reservas para esta data se não existir
+        if (!reservations[selectedDateKey]) {
+          reservations[selectedDateKey] = {};
+        }
+        
+        // Marcar os horários selecionados como reservados
+        selectedSlots.forEach(slot => {
+          const slotKey = slot.dataset.slotKey;
+          reservations[selectedDateKey][slotKey] = {
+            reserved: true,
+            resourceType: selectedResourceType,
+            resource: selectedResource,
+            resourceName: resourceNames[selectedResource]
+          };
+        });
+        
+        // Salvar reservas atualizadas
+        saveReservations(reservations);
+        
+        alert(`Reserva confirmada para ${resourceNames[selectedResource]} nos horários:\n- ${selectedTimes.join('\n- ')}`);
+        
+        // Atualizar o calendário para refletir as novas reservas
+        generateCalendar();
+        generateTimeSlots();
+        
+        // Fechar o modal
+        closeModalHandler();
+      });
+      
+      // Inicializar o calendário
+      generateCalendar();
+    });
