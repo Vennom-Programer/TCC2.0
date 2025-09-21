@@ -227,14 +227,14 @@ def cadastroItensPost():
     especificacaoTecnica = request.form.get('item-specs')
     
     cursor = mydb.cursor()
-    query = "INSERT INTO itenscadastrados (id, NomeItem, TipoItem, descricao, quantidade, localização, especificacoestec) VALUES ('1',%s, %s, %s, %s, %s, %s)"
+    query = "INSERT INTO itens (id, Nome, id_classificacao, descricao, quantidade, id_localizacao, especificacoestec) VALUES ('1',%s, %s, %s, %s, %s, %s)"
 
     values = (nomeItem, tipoItem, descricao, quantidade, localizacao, especificacaoTecnica)
     cursor.execute(query, values)
     mydb.commit()
     cursor.close()
-    
-    return render_template('cadastroItem.html')
+
+    return redirect('/catalogo.html')
 
 
 @app.route('/index.html', methods=['GET', 'POST'])

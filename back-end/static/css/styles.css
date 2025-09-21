@@ -86,23 +86,6 @@
         .criar-usuario .card-icon { background: linear-gradient(135deg,#e6f7ff,#dff2ff); color:#1f77b4; }
         .calendario-admin .card-icon { background: linear-gradient(135deg,#f0ffe6,#f2ffd8); color:#2e8b57; }
         .admin-reports .card-icon { background: linear-gradient(135deg,#f6e6ff,#f3deff); color:#8e44ad; }
-
-        .laboratorio {
-            border-top: 4px solid #e74c3c;
-        }
-
-        .auditorio {
-            border-top: 4px solid #2ecc71;
-        }
-
-        .arquivos {
-            border-top: 4px solid #f39c12;
-        }
-
-        .catalogo {
-            border-top: 4px solid #830583;
-        }
-
         @media (max-width: 600px) {
             .container {
                 padding: 20px;

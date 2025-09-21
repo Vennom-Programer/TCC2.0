@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', function () {
     const saveBtn = document.querySelector('.form-actions .btn-primary');
     const cancelBtn = document.querySelector('.form-actions .btn-secondary');
-    const form = document.querySelector('form[action="/cadastroItens"]');
+    const form = document.querySelector('form[action="/cadastroItem.html"]');
 
     // Ensure save button allows normal form submission (no JS preventDefault)
     if (saveBtn && form) {
