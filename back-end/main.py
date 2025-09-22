@@ -219,17 +219,17 @@ def cadastroItensPost():
     check = require_login_or_redirect()
     if check:
         return check
-    nomeItem = request.form.get('item-name')
-    tipoItem = request.form.get('item-type')
+    nome = request.form.get('item-name')
+    id_classificacao = request.form.get('item-type')
     descricao = request.form.get('item-description')
     quantidade = request.form.get('item-quantity')
-    localizacao = request.form.get('item-location')
-    especificacaoTecnica = request.form.get('item-specs')
+    id_localizacao = request.form.get('item-location')
+    especificacaotec = request.form.get('item-specs')
     
     cursor = mydb.cursor()
     query = "INSERT INTO itens (id, Nome, id_classificacao, descricao, quantidade, id_localizacao, especificacoestec) VALUES ('1',%s, %s, %s, %s, %s, %s)"
 
-    values = (nomeItem, tipoItem, descricao, quantidade, localizacao, especificacaoTecnica)
+    values = (nome, id_classificacao, descricao, quantidade, id_localizacao, especificacaotec)
     cursor.execute(query, values)
     mydb.commit()
     cursor.close()
