@@ -206,7 +206,7 @@ def loginPost():
     return redirect(url_for('index'))
     
 
-@app.route('/cadastroItem.html', methods=['GET'])
+@app.route('/cadastroItem', methods=['GET'])
 def cadastroItens():
     check = require_login_or_redirect()
     if check:
