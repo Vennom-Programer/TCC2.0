@@ -92,3 +92,28 @@
       max-width: 100%;
     }
   }
+
+  .role-fieldset{
+    border-style: none;
+    display: flex;
+    flex-direction: row;
+    gap: 12px; /* spacing between radio options */
+    align-items: center;
+    margin-bottom: 14px;
+    justify-content: center; /* center the radio options */
+  }
+
+  .role-fieldset legend{
+    width: 100%;
+    text-align: center;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: #333;
+  }
+  .role-fieldset label{
+    display: inline-flex;
+    align-items: center;
+    gap: 8px; /* space between radio and text */
+    font-weight: 600;
+    color: #555;
+  }
