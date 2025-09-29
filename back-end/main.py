@@ -259,7 +259,29 @@ def calendario():
     check = require_login_or_redirect()
     if check:
         return check
-    return render_template('calendario.html')
+    # Pull reservations from emprestimo table and pass to template
+    cursor = mydb.cursor()
+    try:
+        cursor.execute("SELECT id_usuario, id_item, data_realizacao, data_reserva, status FROM emprestimo")
+        rows = cursor.fetchall()
+    except Exception:
+        rows = []
+    cursor.close()
+
+    reservas = []
+    for r in rows:
+        # r may contain date/datetime objects; convert to ISO strings for JSON
+        data_realizacao = r[2].isoformat() if hasattr(r[2], 'isoformat') else (str(r[2]) if r[2] is not None else None)
+        data_reserva = r[3].isoformat() if hasattr(r[3], 'isoformat') else (str(r[3]) if r[3] is not None else None)
+        reservas.append({
+            'id_usuario': r[0],
+            'id_item': r[1],
+            'data_realizacao': data_realizacao,
+            'data_reserva': data_reserva,
+            'status': r[4]
+        })
+
+    return render_template('calendario.html', reservas=reservas)
 
 
 @app.route('/relatorios')

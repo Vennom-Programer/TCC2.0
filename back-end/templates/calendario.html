@@ -3,18 +3,39 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <link rel="stylesheet" href="{{url_for('static', filename='css/calendario.css')}}">
   <title>Calendário de Disponibilidade</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/calendario.css') }}">
 </head>
 <body>
   <div class="calendar-container" role="application" aria-label="Calendário de disponibilidade de recursos">
-    <header style="display:flex; align-items:center; justify-content:space-between;">
-      <a href="/index.html" class="back-button">&larr; Voltar ao Menu</a>
-      <h1 id="monthYear"></h1>
+    <header>
+      <a href="/index.html" class="back-button"><i class="fas fa-arrow-left"></i> Voltar</a>
+      <h1 id="monthYear">Junho 2023</h1>
     </header>
-    <body>
-  <div class="calendar-container" role="application" aria-label="Calendário de disponibilidade de recursos">
+    
+    <div class="user-controls">
+      <div style="display: flex; gap: 10px; align-items: center;">
+        <label for="userSelect">Usuário:</label>
+        <select class="user-select" id="userSelect">
+          <option value="user1">João Silva</option>
+          <option value="user2">Maria Santos</option>
+          <option value="user3">Pedro Oliveira</option>
+          <option value="user4">Ana Costa</option>
+        </select>
+      </div>
+      
+      <div style="display: flex; gap: 10px;">
+        <div class="filter-option" data-filter="all">
+          <i class="fas fa-calendar-alt"></i>
+          <span>Todas as reservas</span>
+        </div>
+        <div class="filter-option" data-filter="my">
+          <i class="fas fa-user"></i>
+          <span>Minhas reservas</span>
+        </div>
+      </div>
+    </div>
     
     <div class="weekdays" role="row" aria-label="Dias da semana">
       <div role="columnheader">Dom</div>
@@ -32,9 +53,16 @@
     
     <div class="legend" aria-label="Legenda dos recursos">
       <div class="legend-item"><div class="legend-icon available"></div>Dia disponível</div>
-      <div class="legend-item"><div class="legend-icon reserved"></div>Dia com reservas</div>
-      <div class="legend-item"><div class="legend-icon inactive"></div>Final de semana</div>
+      <div class="legend-item"><div class="legend-icon reserved"></div>Reservas de outros</div>
+      <div class="legend-item"><div class="legend-icon my-reserved"></div>Minhas reservas</div>
+      <div class="legend-item"><div class="legend-icon past"></div>Dia passado</div>
+      <div class="legend-item"><div class="legend-icon weekend"></div>Final de semana</div>
     </div>
+  </div>
+
+  <!-- Popup de Reservas do Dia -->
+  <div class="reservations-popup" id="reservationsPopup">
+    <!-- Conteúdo será gerado pelo JavaScript -->
   </div>
 
   <!-- Modal de Horários -->
@@ -48,9 +76,9 @@
       <div class="resource-selection">
         <h3>Selecione o tipo de recurso:</h3>
         <div class="resource-type">
-          <div class="resource-option" data-type="item">
+          <div class="resource-option" data-type="equipment">
             <i class="fas fa-laptop"></i>
-            <div>Item</div>
+            <div>Equipamentos</div>
           </div>
           <div class="resource-option" data-type="space">
             <i class="fas fa-building"></i>
@@ -58,9 +86,9 @@
           </div>
         </div>
         
-        <div class="resource-items" id="itemOptions">
-          <select id="itemSelect">
-            <option value="">Selecione um item</option>
+        <div class="resource-items" id="equipmentOptions">
+          <select id="equipmentSelect">
+            <option value="">Selecione um equipamento</option>
             <option value="projetor">Projetor Multimídia</option>
             <option value="notebook">Notebook</option>
             <option value="microfone">Microfone</option>
@@ -116,6 +144,5 @@
       </div>
     </div>
   </div>
-  <script src="{{url_for('static', filename='js/calendario.js')}}"></script>
 </body>
 </html>

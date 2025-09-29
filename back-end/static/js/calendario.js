@@ -69,6 +69,22 @@ document.addEventListener('DOMContentLoaded', function() {
         'auditorio': 'Auditório',
         'sala-reuniao': 'Sala de Reunião'
       };
+
+      // Build server reservations map (by dateKey) if server provided data
+      const serverReservationsRaw = (window.serverReservations && Array.isArray(window.serverReservations)) ? window.serverReservations : [];
+      const serverReservationsMap = {};
+      serverReservationsRaw.forEach(r => {
+        try {
+          const d = new Date(r.data_reserva);
+          if (!isNaN(d)) {
+            const key = getDateKey(d.getDate(), d.getMonth(), d.getFullYear());
+            if (!serverReservationsMap[key]) serverReservationsMap[key] = [];
+            serverReservationsMap[key].push(r);
+          }
+        } catch (e) {
+          // ignore malformed dates
+        }
+      });
       
       // Obter reservas do localStorage ou inicializar objeto vazio
       function getReservations() {
@@ -99,8 +115,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const lastDay = new Date(currentYear, currentMonth + 1, 0);
         const daysInMonth = lastDay.getDate();
         
-        // Obter reservas
-        const reservations = getReservations();
+  // Obter reservas (cliente) e verificar reservas vindas do servidor
+  const reservations = getReservations();
         
         // Preencher os dias vazios no início do mês
         for (let i = 0; i < startingDay; i++) {
@@ -122,11 +138,15 @@ document.addEventListener('DOMContentLoaded', function() {
           } else {
             const dateKey = getDateKey(day, currentMonth, currentYear);
             const dayReservations = reservations[dateKey];
-            const hasReservations = dayReservations && Object.values(dayReservations).some(r => r.reserved);
-            
+            const hasClientReservations = dayReservations && Object.values(dayReservations).some(r => r.reserved);
+            const hasServerReservations = serverReservationsMap[dateKey] && serverReservationsMap[dateKey].length > 0;
+            const hasReservations = hasClientReservations || hasServerReservations;
+
             if (hasReservations) {
               dayElement.classList.add('has-reservations');
-              const reservationCount = dayReservations ? Object.values(dayReservations).filter(r => r.reserved).length : 0;
+              const clientCount = dayReservations ? Object.values(dayReservations).filter(r => r.reserved).length : 0;
+              const serverCount = hasServerReservations ? serverReservationsMap[dateKey].length : 0;
+              const reservationCount = clientCount + serverCount;
               dayElement.innerHTML = `
                 <div class="day-number">${day}</div>
                 <div class="day-reservations">${reservationCount} reserva(s)</div>
@@ -172,11 +192,28 @@ document.addEventListener('DOMContentLoaded', function() {
         // Limpar seleções de recursos
         clearResourceSelection();
         
-        // Gerar os horários
-        generateTimeSlots();
+  // Gerar os horários
+  generateTimeSlots();
+
+  // Preencher detalhes vindos do servidor para esta data (se houver)
+  populateServerReservations(selectedDateKey);
         
         // Mostrar o modal
         modalOverlay.style.display = 'flex';
+      }
+
+      // Populate reservationDetails with server-side reservations for the selected date
+      function populateServerReservations(dateKey) {
+        const serverList = serverReservationsMap[dateKey] || [];
+        if (serverList.length === 0) return;
+        // Build a simple HTML summary
+        const html = serverList.map(r => {
+          const dataReserva = r.data_reserva || '';
+          const status = r.status || '';
+          return `<div class="server-reservation">Usuário: ${r.id_usuario} — Item: ${r.id_item} — Status: ${status} — Data: ${dataReserva}</div>`;
+        }).join('');
+        // Prepend server reservations into reservationDetails
+        reservationDetails.innerHTML = html + reservationDetails.innerHTML;
       }
       
       // Limpar seleção de recursos
