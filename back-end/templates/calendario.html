@@ -5,13 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <title>Calendário de Disponibilidade</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/calendario.css') }}">
+  <link rel="stylesheet" href="/static/css/calendario.css" />
 </head>
 <body>
   <div class="calendar-container" role="application" aria-label="Calendário de disponibilidade de recursos">
     <header>
       <a href="/index.html" class="back-button"><i class="fas fa-arrow-left"></i> Voltar</a>
-      <h1 id="monthYear">Junho 2023</h1>
+      <div class="month-navigation">
+        <button id="prevMonth" class="nav-button" aria-label="Mês anterior"><i class="fas fa-chevron-left"></i></button>
+        <h1 id="monthYear"></h1>
+        <button id="nextMonth" class="nav-button" aria-label="Próximo mês"><i class="fas fa-chevron-right"></i></button>
+      </div>
     </header>
     
     <div class="user-controls">
@@ -53,7 +57,7 @@
     
     <div class="legend" aria-label="Legenda dos recursos">
       <div class="legend-item"><div class="legend-icon available"></div>Dia disponível</div>
-      <div class="legend-item"><div class="legend-icon reserved"></div>Reservas de outros</div>
+      <div class="legend-item"><div class="legend-icon reserved"></div>Reservas</div>
       <div class="legend-item"><div class="legend-icon my-reserved"></div>Minhas reservas</div>
       <div class="legend-item"><div class="legend-icon past"></div>Dia passado</div>
       <div class="legend-item"><div class="legend-icon weekend"></div>Final de semana</div>
@@ -62,7 +66,12 @@
 
   <!-- Popup de Reservas do Dia -->
   <div class="reservations-popup" id="reservationsPopup">
-    <!-- Conteúdo será gerado pelo JavaScript -->
+    <div class="popup-header">
+      <h3 id="popupTitle">Reservas para </h3>
+    </div>
+    <div class="popup-content" id="popupContent">
+      <!-- Conteúdo será gerado pelo JavaScript -->
+    </div>
   </div>
 
   <!-- Modal de Horários -->
@@ -144,5 +153,6 @@
       </div>
     </div>
   </div>
+  <script src="/static/js/calendario.js"></script>
 </body>
 </html>

@@ -1,6 +1,9 @@
 document.addEventListener('DOMContentLoaded', function() {
+      // Elementos DOM
       const calendarDays = document.getElementById('calendarDays');
       const monthYearElement = document.getElementById('monthYear');
+      const prevMonthButton = document.getElementById('prevMonth');
+      const nextMonthButton = document.getElementById('nextMonth');
       const modalOverlay = document.getElementById('modalOverlay');
       const modalTitle = document.getElementById('modalTitle');
       const selectedDateElement = document.getElementById('selectedDate');
@@ -10,13 +13,19 @@ document.addEventListener('DOMContentLoaded', function() {
       const reserveButton = document.getElementById('reserveButton');
       const cancelButton = document.getElementById('cancelButton');
       const closeModal = document.getElementById('closeModal');
-      const itemOptions = document.getElementById('itemOptions');
+      const equipmentOptions = document.getElementById('equipmentOptions');
       const spaceOptions = document.getElementById('spaceOptions');
-      const itemSelect = document.getElementById('itemSelect');
+      const equipmentSelect = document.getElementById('equipmentSelect');
       const spaceSelect = document.getElementById('spaceSelect');
       const reservationDetails = document.getElementById('reservationDetails');
       const resourceOptions = document.querySelectorAll('.resource-option');
+      const userSelect = document.getElementById('userSelect');
+      const filterOptions = document.querySelectorAll('.filter-option');
+      const reservationsPopup = document.getElementById('reservationsPopup');
+      const popupTitle = document.getElementById('popupTitle');
+      const popupContent = document.getElementById('popupContent');
       
+      // Estado da aplicação
       let currentDate = new Date();
       let currentMonth = currentDate.getMonth();
       let currentYear = currentDate.getFullYear();
@@ -25,16 +34,17 @@ document.addEventListener('DOMContentLoaded', function() {
       let isCancelMode = false;
       let selectedResourceType = null;
       let selectedResource = null;
+      let currentUser = 'user1';
+      let currentFilter = 'all';
+      let popupTimeout = null;
       
-      // Nomes dos meses
+      // Constantes
       const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", 
                          "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
       
-      // Dias da semana
       const dayNames = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", 
                        "Quinta-feira", "Sexta-feira", "Sábado"];
       
-      // Horários conforme especificado
       const morningSchedule = [
         { number: '1º', start: '07:30', end: '08:20', key: '1' },
         { number: '2º', start: '08:20', end: '09:10', key: '2' },
@@ -56,7 +66,6 @@ document.addEventListener('DOMContentLoaded', function() {
         { number: '12º', start: '21:10', end: '22:00', key: '12' }
       ];
       
-      // Mapeamento de recursos para nomes amigáveis
       const resourceNames = {
         'projetor': 'Projetor Multimídia',
         'notebook': 'Notebook',
@@ -69,40 +78,163 @@ document.addEventListener('DOMContentLoaded', function() {
         'auditorio': 'Auditório',
         'sala-reuniao': 'Sala de Reunião'
       };
-
-      // Build server reservations map (by dateKey) if server provided data
-      const serverReservationsRaw = (window.serverReservations && Array.isArray(window.serverReservations)) ? window.serverReservations : [];
-      const serverReservationsMap = {};
-      serverReservationsRaw.forEach(r => {
-        try {
-          const d = new Date(r.data_reserva);
-          if (!isNaN(d)) {
-            const key = getDateKey(d.getDate(), d.getMonth(), d.getFullYear());
-            if (!serverReservationsMap[key]) serverReservationsMap[key] = [];
-            serverReservationsMap[key].push(r);
-          }
-        } catch (e) {
-          // ignore malformed dates
-        }
-      });
       
-      // Obter reservas do localStorage ou inicializar objeto vazio
+      const userNames = {
+        'user1': 'João Silva',
+        'user2': 'Maria Santos',
+        'user3': 'Pedro Oliveira',
+        'user4': 'Ana Costa'
+      };
+      
+      const userColors = {
+        'user1': '#e74c3c',
+        'user2': '#3498db',
+        'user3': '#2ecc71',
+        'user4': '#f39c12'
+      };
+      
+      // Funções de utilidade
       function getReservations() {
         const reservations = localStorage.getItem('reservations');
         return reservations ? JSON.parse(reservations) : {};
       }
       
-      // Salvar reservas no localStorage
       function saveReservations(reservations) {
         localStorage.setItem('reservations', JSON.stringify(reservations));
       }
       
-      // Função para formatar a chave da data
       function getDateKey(day, month, year) {
         return `${year}-${month + 1}-${day}`;
       }
+
+      function isPastDate(day, month, year) {
+        const date = new Date(year, month, day);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return date < today;
+      }
       
-      // Função para gerar o calendário
+      function isPastTime(day, month, year, hour, minute) {
+        const dateTime = new Date(year, month, day, hour, minute);
+        return dateTime < new Date();
+      }
+      
+      function getTimeSlotByKey(key) {
+        const allSlots = [...morningSchedule, ...afternoonSchedule, ...eveningSchedule];
+        return allSlots.find(slot => slot.key === key);
+      }
+      
+      // Função para mostrar o popup de reservas
+      function showReservationsPopup(dayElement, day, month, year) {
+        const dateKey = getDateKey(day, month, year);
+        const reservations = getReservations();
+        const dayReservations = reservations[dateKey];
+        
+        // Limpar conteúdo anterior
+        popupContent.innerHTML = ''; // Corrected: Removed backticks
+        
+        // Atualizar título
+        popupTitle.textContent = `Reservas para ${day}/${month + 1}/${year}`;
+        
+        if (!dayReservations || Object.keys(dayReservations).length === 0) {
+          popupContent.innerHTML = '<div class="no-reservations">Nenhuma reserva para este dia</div>';
+        } else {
+          // Agrupar reservas por horário
+          const reservationsByTime = {};
+          
+          Object.values(dayReservations).forEach(reservation => {
+            if (reservation.reserved) {
+              const timeSlot = getTimeSlotByKey(reservation.originalSlotKey);
+              if (timeSlot) {
+                const timeKey = `${timeSlot.start}-${timeSlot.end}`;
+                if (!reservationsByTime[timeKey]) {
+                  reservationsByTime[timeKey] = {
+                    time: `${timeSlot.start} às ${timeSlot.end}`,
+                    reservations: []
+                  };
+                }
+                reservationsByTime[timeKey].reservations.push(reservation);
+              }
+            }
+          });
+          
+          // Ordenar horários
+          const sortedTimes = Object.keys(reservationsByTime).sort((a, b) => {
+            return parseInt(a.split('-')[0].replace(':', '')) - parseInt(b.split('-')[0].replace(':', ''));
+          });
+          
+          // Criar conteúdo do popup
+          if (sortedTimes.length === 0) {
+            popupContent.innerHTML = '<div class="no-reservations">Nenhuma reserva para este dia</div>';
+          } else {
+            sortedTimes.forEach(timeKey => {
+              const timeData = reservationsByTime[timeKey];
+              const timeElement = document.createElement('div');
+              timeElement.classList.add('reservation-item');
+              
+              timeElement.innerHTML = `
+                <div class="reservation-time">${timeData.time}</div>
+              `;
+              
+              timeData.reservations.forEach(reservation => {
+                const reservationElement = document.createElement('div');
+                reservationElement.classList.add('reservation-detail');
+                reservationElement.innerHTML = `
+                  <div><strong>Recurso:</strong> ${reservation.resourceName}</div>
+                  <div class="reservation-user">
+                    <span class="user-badge ${reservation.userId}"></span>
+                    ${reservation.userName}
+                  </div>
+                `;
+                timeElement.appendChild(reservationElement);
+              });
+              
+              popupContent.appendChild(timeElement);
+            });
+          }
+        }
+        
+        // Posicionar o popup
+        const rect = dayElement.getBoundingClientRect();
+        const calendarRect = calendarDays.getBoundingClientRect();
+        
+        let top = rect.bottom + window.scrollY;
+        let left = rect.left + window.scrollX;
+        
+        // Ajustar posição se o popup ultrapassar a tela
+        if (left + 280 > window.innerWidth) {
+          left = window.innerWidth - 280;
+        }
+        
+        if (top + 300 > window.innerHeight) {
+          top = rect.top + window.scrollY - 300;
+        }
+        
+        reservationsPopup.style.top = top + 'px';
+        reservationsPopup.style.left = left + 'px';
+        reservationsPopup.classList.add('visible');
+        
+        // Configurar timeout para fechar o popup
+        clearTimeout(popupTimeout);
+        popupTimeout = setTimeout(() => {
+          reservationsPopup.classList.remove('visible');
+        }, 5000); // Fechar após 5 segundos
+      }
+      
+      // Função para mudar o mês
+      function changeMonth(offset) {
+        currentMonth += offset;
+        if (currentMonth < 0) {
+          currentMonth = 11;
+          currentYear--;
+        } else if (currentMonth > 11) {
+          currentMonth = 0;
+          currentYear++;
+        }
+        generateCalendar();
+      }
+
+      // Função para gerar o calendário - CORRIGIDA
       function generateCalendar() {
         calendarDays.innerHTML = '';
         monthYearElement.textContent = `${monthNames[currentMonth]} ${currentYear}`;
@@ -115,8 +247,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const lastDay = new Date(currentYear, currentMonth + 1, 0);
         const daysInMonth = lastDay.getDate();
         
-  // Obter reservas (cliente) e verificar reservas vindas do servidor
-  const reservations = getReservations();
+        // Obter reservas
+        const reservations = getReservations();
         
         // Preencher os dias vazios no início do mês
         for (let i = 0; i < startingDay; i++) {
@@ -130,40 +262,95 @@ document.addEventListener('DOMContentLoaded', function() {
           const dayElement = document.createElement('div');
           const dayOfWeek = new Date(currentYear, currentMonth, day).getDay();
           const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+          const isPast = isPastDate(day, currentMonth, currentYear);
           
           dayElement.classList.add('day');
           
           if (isWeekend) {
-            dayElement.classList.add('inactive');
+            dayElement.classList.add('weekend');
+          } else if (isPast) {
+            dayElement.classList.add('past');
           } else {
             const dateKey = getDateKey(day, currentMonth, currentYear);
             const dayReservations = reservations[dateKey];
-            const hasClientReservations = dayReservations && Object.values(dayReservations).some(r => r.reserved);
-            const hasServerReservations = serverReservationsMap[dateKey] && serverReservationsMap[dateKey].length > 0;
-            const hasReservations = hasClientReservations || hasServerReservations;
-
-            if (hasReservations) {
-              dayElement.classList.add('has-reservations');
-              const clientCount = dayReservations ? Object.values(dayReservations).filter(r => r.reserved).length : 0;
-              const serverCount = hasServerReservations ? serverReservationsMap[dateKey].length : 0;
-              const reservationCount = clientCount + serverCount;
-              dayElement.innerHTML = `
-                <div class="day-number">${day}</div>
-                <div class="day-reservations">${reservationCount} reserva(s)</div>
-              `;
-            } else {
-              dayElement.classList.add('available');
-              dayElement.innerHTML = `
-                <div class="day-number">${day}</div>
-              `;
+            
+            // Contar reservas
+            let totalReservations = 0;
+            let myReservationsCount = 0;
+            
+            if (dayReservations) {
+              // Contar todas as reservas
+              totalReservations = Object.values(dayReservations).filter(r => r.reserved).length;
+              
+              // Contar minhas reservas
+              myReservationsCount = Object.values(dayReservations).filter(r => 
+                r.reserved && r.userId === currentUser
+              ).length;
             }
             
-            dayElement.addEventListener('click', () => selectDay(dayElement, day, dayOfWeek));
+            // Aplicar o filtro atual - CORRIGIDO
+            if (currentFilter === 'all') {
+              // No filtro "Todas as reservas", mostrar número total de reservas
+              if (totalReservations > 0) {
+                dayElement.classList.add('has-reservations');
+                dayElement.innerHTML = ` 
+                  <div class="day-number">${day}</div> 
+                  <div class="day-reservations">${totalReservations} reserva(s)</div> 
+                `;
+              } else {
+                dayElement.classList.add('available');
+                dayElement.innerHTML = ` 
+                  <div class="day-number">${day}</div>
+                `;
+              }
+            } else if (currentFilter === 'my') {
+              // No filtro "Minhas reservas", mostrar apenas minhas reservas
+              if (myReservationsCount > 0) {
+                dayElement.classList.add('has-my-reservations');
+                dayElement.innerHTML = ` 
+                  <div class="day-number">${day}</div> 
+                  <div class="day-reservations day-my-reservations">${myReservationsCount} minhas</div> 
+                `;
+              } else {
+                dayElement.classList.add('available');
+                dayElement.innerHTML = ` 
+                  <div class="day-number">${day}</div>
+                `;
+              }
+            }
+            
+            if (!isPast) {
+              // Adicionar evento de clique para selecionar o dia
+              dayElement.addEventListener('click', () => selectDay(dayElement, day, dayOfWeek));
+              
+              // Adicionar evento de mouseenter para mostrar reservas
+              dayElement.addEventListener('mouseenter', () => {
+                showReservationsPopup(dayElement, day, currentMonth, currentYear);
+              });
+              
+              // Adicionar evento de mouseleave para esconder reservas
+              dayElement.addEventListener('mouseleave', () => {
+                clearTimeout(popupTimeout);
+                popupTimeout = setTimeout(() => {
+                  reservationsPopup.classList.remove('visible');
+                }, 300);
+              });
+            }
           }
           
           calendarDays.appendChild(dayElement);
         }
+        
+        // Adicionar evento para fechar popup ao clicar fora
+        document.addEventListener('click', (e) => {
+          if (!reservationsPopup.contains(e.target) && !e.target.closest('.day.available')) {
+            reservationsPopup.classList.remove('visible');
+          }
+        });
       }
+      
+      // Resto do código JavaScript permanece igual
+      // ... (funções selectDay, clearResourceSelection, generateTimeSlots, etc.)
       
       // Função para selecionar um dia
       function selectDay(dayElement, day, dayOfWeek) {
@@ -192,28 +379,14 @@ document.addEventListener('DOMContentLoaded', function() {
         // Limpar seleções de recursos
         clearResourceSelection();
         
-  // Gerar os horários
-  generateTimeSlots();
-
-  // Preencher detalhes vindos do servidor para esta data (se houver)
-  populateServerReservations(selectedDateKey);
+        // Gerar os horários
+        generateTimeSlots();
         
         // Mostrar o modal
         modalOverlay.style.display = 'flex';
-      }
-
-      // Populate reservationDetails with server-side reservations for the selected date
-      function populateServerReservations(dateKey) {
-        const serverList = serverReservationsMap[dateKey] || [];
-        if (serverList.length === 0) return;
-        // Build a simple HTML summary
-        const html = serverList.map(r => {
-          const dataReserva = r.data_reserva || '';
-          const status = r.status || '';
-          return `<div class="server-reservation">Usuário: ${r.id_usuario} — Item: ${r.id_item} — Status: ${status} — Data: ${dataReserva}</div>`;
-        }).join('');
-        // Prepend server reservations into reservationDetails
-        reservationDetails.innerHTML = html + reservationDetails.innerHTML;
+        
+        // Fechar popup de reservas
+        reservationsPopup.classList.remove('visible');
       }
       
       // Limpar seleção de recursos
@@ -221,9 +394,9 @@ document.addEventListener('DOMContentLoaded', function() {
         resourceOptions.forEach(option => {
           option.classList.remove('selected');
         });
-        itemOptions.classList.remove('visible');
+        equipmentOptions.classList.remove('visible');
         spaceOptions.classList.remove('visible');
-        itemSelect.value = '';
+        equipmentSelect.value = '';
         spaceSelect.value = '';
         selectedResourceType = null;
         selectedResource = null;
@@ -239,12 +412,22 @@ document.addEventListener('DOMContentLoaded', function() {
         // Obter reservas
         const reservations = getReservations();
         const dayReservations = reservations[selectedDateKey] || {};
+        const selectedDate = new Date(currentYear, currentMonth, parseInt(selectedDateKey.split('-')[2]));
         
         // Gerar horários da manhã
         morningSchedule.forEach(slot => {
           const reservation = dayReservations[slot.key];
           const isReserved = reservation && reservation.reserved;
-          const timeSlot = createTimeSlotElement(slot, isReserved, reservation);
+          const isMyReservation = isReserved && reservation.userId === currentUser;
+          const isPast = isPastTime(
+            selectedDate.getDate(), 
+            currentMonth, 
+            currentYear, 
+            parseInt(slot.start.split(':')[0]), 
+            parseInt(slot.start.split(':')[1])
+          );
+          
+          const timeSlot = createTimeSlotElement(slot, isReserved, isMyReservation, reservation, isPast);
           morningSlots.appendChild(timeSlot);
         });
         
@@ -252,7 +435,16 @@ document.addEventListener('DOMContentLoaded', function() {
         afternoonSchedule.forEach(slot => {
           const reservation = dayReservations[slot.key];
           const isReserved = reservation && reservation.reserved;
-          const timeSlot = createTimeSlotElement(slot, isReserved, reservation);
+          const isMyReservation = isReserved && reservation.userId === currentUser;
+          const isPast = isPastTime(
+            selectedDate.getDate(), 
+            currentMonth, 
+            currentYear, 
+            parseInt(slot.start.split(':')[0]), 
+            parseInt(slot.start.split(':')[1])
+          );
+          
+          const timeSlot = createTimeSlotElement(slot, isReserved, isMyReservation, reservation, isPast);
           afternoonSlots.appendChild(timeSlot);
         });
         
@@ -260,7 +452,16 @@ document.addEventListener('DOMContentLoaded', function() {
         eveningSchedule.forEach(slot => {
           const reservation = dayReservations[slot.key];
           const isReserved = reservation && reservation.reserved;
-          const timeSlot = createTimeSlotElement(slot, isReserved, reservation);
+          const isMyReservation = isReserved && reservation.userId === currentUser;
+          const isPast = isPastTime(
+            selectedDate.getDate(), 
+            currentMonth, 
+            currentYear, 
+            parseInt(slot.start.split(':')[0]), 
+            parseInt(slot.start.split(':')[1])
+          );
+          
+          const timeSlot = createTimeSlotElement(slot, isReserved, isMyReservation, reservation, isPast);
           eveningSlots.appendChild(timeSlot);
         });
         
@@ -269,33 +470,58 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       
       // Função para criar elemento de horário
-      function createTimeSlotElement(slot, isReserved, reservation) {
+      function createTimeSlotElement(slot, isReserved, isMyReservation, reservation, isPast) {
         const timeSlot = document.createElement('div');
         timeSlot.classList.add('time-slot');
         timeSlot.dataset.slotKey = slot.key;
         
-        if (isReserved) {
-          timeSlot.classList.add('reserved');
-          let reservedText = 'Reservado';
-          if (reservation && reservation.resourceType && reservation.resource) {
-            reservedText = `Reservado (${resourceNames[reservation.resource]})`;
-          }
-          
-          timeSlot.innerHTML = `
+        if (isPast) {
+          timeSlot.classList.add('past');
+          timeSlot.innerHTML = ` 
             <div class="time-slot-number">${slot.number}</div>
             <div class="time-range">${slot.start} às ${slot.end}</div>
-            <div class="time-slot-status status-reserved">${reservedText}</div>
+            <div class="time-slot-status status-past">Horário passado</div>
+          `;
+        } else if (isReserved) {
+          if (isMyReservation) {
+            timeSlot.classList.add('reserved', 'my-reservation');
+          } else {
+            timeSlot.classList.add('reserved');
+          }
+          
+          let reservedText = isMyReservation ? 'Minha reserva' : 'Reservado';
+          if (reservation && reservation.resourceName) {
+            reservedText += ` (${reservation.resourceName})`;
+          }
+          
+          timeSlot.innerHTML = ` 
+            <div class="time-slot-number">${slot.number}</div>
+            <div class="time-range">${slot.start} às ${slot.end}</div>
+            <div class="time-slot-status ${isMyReservation ? 'status-my-reservation' : 'status-reserved'}">${reservedText}</div>
           `;
           
-          // Adicionar evento de clique para modo de cancelamento
-          timeSlot.addEventListener('click', function() {
-            if (isCancelMode) {
-              this.classList.toggle('to-cancel');
-              updateButtonStates();
-            }
-          });
+          // Adicionar badge de usuário para diferenciar reservas
+          if (reservation && reservation.userId) {
+            const userBadge = document.createElement('div');
+            userBadge.classList.add('reservation-user-modal');
+            userBadge.innerHTML = `
+              <span class="user-badge-modal ${reservation.userId}"></span>
+              ${userNames[reservation.userId] || reservation.userId}
+            `;
+            timeSlot.appendChild(userBadge);
+          }
+          
+          // Adicionar evento de clique para modo de cancelamento (apenas minhas reservas)
+          if (isMyReservation) {
+            timeSlot.addEventListener('click', function() {
+              if (isCancelMode) {
+                this.classList.toggle('to-cancel');
+                updateButtonStates();
+              }
+            });
+          }
         } else {
-          timeSlot.innerHTML = `
+          timeSlot.innerHTML = ` 
             <div class="time-slot-number">${slot.number}</div>
             <div class="time-range">${slot.start} às ${slot.end}</div>
             <div class="time-slot-status status-available">Disponível</div>
@@ -328,6 +554,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         reservationDetails.innerHTML = `
+          <div><strong>Usuário:</strong> ${userNames[currentUser]}</div>
           <div><strong>Recurso:</strong> ${resourceNames[selectedResource]}</div>
           <div><strong>Horários selecionados:</strong></div>
           <div>${selectedTimes.join(', ')}</div>
@@ -346,12 +573,14 @@ document.addEventListener('DOMContentLoaded', function() {
           
           reserveButton.disabled = !canReserve;
           
-          // Verificar se há reservas para este dia
+          // Verificar se há minhas reservas para este dia
           const reservations = getReservations();
           const dayReservations = reservations[selectedDateKey] || {};
-          const hasReservations = Object.keys(dayReservations).length > 0;
+          const hasMyReservations = Object.values(dayReservations).some(r => 
+            r.reserved && r.userId === currentUser
+          );
           
-          cancelButton.disabled = !hasReservations;
+          cancelButton.disabled = !hasMyReservations;
         }
       }
       
@@ -361,7 +590,7 @@ document.addEventListener('DOMContentLoaded', function() {
           cancelButton.innerHTML = '<i class="fas fa-times"></i> Confirmar Cancelamento';
           cancelButton.classList.add('cancel-mode-active');
         } else {
-          cancelButton.innerHTML = '<i class="fas fa-times-circle"></i> Cancelar Reservas';
+          cancelButton.innerHTML = '<i class="fas fa-times-circle"></i> Cancelar Minhas Reservas';
           cancelButton.classList.remove('cancel-mode-active');
         }
       }
@@ -379,22 +608,22 @@ document.addEventListener('DOMContentLoaded', function() {
           selectedResourceType = type;
           
           // Mostrar opções apropriadas
-          if (type === 'item') {
-            itemOptions.classList.add('visible');
+          if (type === 'equipment') {
+            equipmentOptions.classList.add('visible');
             spaceOptions.classList.remove('visible');
             spaceSelect.value = '';
           } else {
             spaceOptions.classList.add('visible');
-            itemOptions.classList.remove('visible');
-            itemSelect.value = '';
+            equipmentOptions.classList.remove('visible');
+            equipmentSelect.value = '';
           }
           
           updateButtonStates();
         });
       });
       
-      // Selecionar item específico
-      itemSelect.addEventListener('change', function() {
+      // Selecionar equipamento específico
+      equipmentSelect.addEventListener('change', function() {
         selectedResource = this.value;
         updateButtonStates();
         updateReservationDetails();
@@ -407,14 +636,42 @@ document.addEventListener('DOMContentLoaded', function() {
         updateReservationDetails();
       });
       
+      // Alterar usuário
+      userSelect.addEventListener('change', function() {
+        currentUser = this.value;
+        generateCalendar();
+      });
+      
+      // Aplicar filtro
+      filterOptions.forEach(option => {
+        option.addEventListener('click', function() {
+          const filter = this.dataset.filter;
+          
+          // Desselecionar outros filtros
+          filterOptions.forEach(opt => opt.classList.remove('active'));
+          
+          // Selecionar este filtro
+          this.classList.add('active');
+          currentFilter = filter;
+          
+          // Atualizar calendário
+          generateCalendar();
+        });
+      });
+      
+      // Inicializar filtro "Todas as reservas" como ativo
+      document.querySelector('.filter-option[data-filter="all"]').classList.add('active');
+      
       // Alternar entre modos de reserva e cancelamento
       cancelButton.addEventListener('click', function() {
         const reservations = getReservations();
         const dayReservations = reservations[selectedDateKey] || {};
-        const hasReservations = Object.keys(dayReservations).length > 0;
+        const hasMyReservations = Object.values(dayReservations).some(r => 
+          r.reserved && r.userId === currentUser
+        );
         
-        if (!hasReservations) {
-          alert('Não há reservas para cancelar neste dia.');
+        if (!hasMyReservations) {
+          alert('Você não tem reservas para cancelar neste dia.');
           return;
         }
         
@@ -515,14 +772,39 @@ document.addEventListener('DOMContentLoaded', function() {
           reservations[selectedDateKey] = {};
         }
         
+        // Verificar se o usuário já reservou este mesmo recurso nos horários selecionados
+        const conflictingSlots = [];
+        selectedSlots.forEach(slot => {
+          const slotKey = slot.dataset.slotKey;
+          const existingReservation = reservations[selectedDateKey][slotKey];
+          
+          // Verificar se já existe uma reserva para o MESMO RECURSO e MESMO USUÁRIO
+          if (existingReservation && existingReservation.reserved && 
+              existingReservation.resource === selectedResource &&
+              existingReservation.userId === currentUser) {
+            conflictingSlots.push(slotKey);
+          }
+        });
+        
+        if (conflictingSlots.length > 0) {
+          alert('Você já possui reservas para este mesmo recurso nos horários selecionados.');
+          return;
+        }
+        
         // Marcar os horários selecionados como reservados
         selectedSlots.forEach(slot => {
           const slotKey = slot.dataset.slotKey;
-          reservations[selectedDateKey][slotKey] = {
+          // Criar uma chave única combinando horário e recurso
+          const reservationKey = `${slotKey}_${selectedResource}`;
+          
+          reservations[selectedDateKey][reservationKey] = {
             reserved: true,
             resourceType: selectedResourceType,
             resource: selectedResource,
-            resourceName: resourceNames[selectedResource]
+            resourceName: resourceNames[selectedResource],
+            userId: currentUser,
+            userName: userNames[currentUser],
+            originalSlotKey: slotKey // Manter referência ao horário original
           };
         });
         
@@ -538,6 +820,10 @@ document.addEventListener('DOMContentLoaded', function() {
         // Fechar o modal
         closeModalHandler();
       });
+      
+      // Adicionar eventos aos botões de navegação
+      prevMonthButton.addEventListener('click', () => changeMonth(-1));
+      nextMonthButton.addEventListener('click', () => changeMonth(1));
       
       // Inicializar o calendário
       generateCalendar();
