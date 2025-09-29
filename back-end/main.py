@@ -206,7 +206,7 @@ def loginPost():
     return redirect(url_for('index'))
     
 
-@app.route('/cadastroItem', methods=['GET'])
+@app.route('/cadastroItem.html', methods=['GET'])
 def cadastroItens():
     check = require_login_or_redirect()
     if check:
@@ -216,6 +216,7 @@ def cadastroItens():
 
 @app.route('/cadastroItem.html', methods=['POST'])
 def cadastroItensPost():
+
     check = require_login_or_redirect()
     if check:
         return check
@@ -227,7 +228,7 @@ def cadastroItensPost():
     especificacaotec = request.form.get('item-specs')
     
     cursor = mydb.cursor()
-    query = "INSERT INTO itens (id, Nome, id_classificacao, descricao, quantidade, id_localizacao, especificacoestec) VALUES ('1',%s, %s, %s, %s, %s, %s)"
+    query = "INSERT INTO itens ( Nome, id_classificacao, descricao, quantidade, id_localizacao, especificacoestec) VALUES (%s, %s, %s, %s, %s, %s)"
 
     values = (nome, id_classificacao, descricao, quantidade, id_localizacao, especificacaotec)
     cursor.execute(query, values)
@@ -276,7 +277,12 @@ def usuarios():
     check = require_admin_or_redirect()
     if check:
         return check
-    return render_template('usuarios.html')
+    # Fetch all users and their roles from DB
+    cursor = mydb.cursor()
+    cursor.execute("SELECT nome, email, role FROM usuarios ORDER BY nome ASC")
+    usuarios = cursor.fetchall()
+    cursor.close()
+    return render_template('usuarios.html', usuarios=usuarios)
 
 @app.route('/catalogo.html', methods=['GET', 'POST'])
 def catalogo():

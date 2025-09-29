@@ -35,38 +35,33 @@
                     <th>Nome</th>
                     <th>Quantidade</th>
                     <th>ID</th>
+                    {% if session.get('usuario_role') and session.get('usuario_role')|lower == 'adm' %}
                     <th class="admin-only">Ações</th>
+                    {% endif %}
                 </tr>
             </thead>
             <tbody id="resourcesTable">
-                <tr>
-                    <td>Microscópio Óptico</td>
-                    <td>15</td>
-                    <td>LAB-001</td>
-                    <td class="actions admin-only">
-                        <button class="btn btn-edit" data-id="LAB-001">Editar</button>
-                        <button class="btn btn-delete">Excluir</button>
-                    </td>
-                </tr>
-                <tr>
-                    <td>Projetor Multimídia</td>
-                    <td>8</td>
-                    <td>AV-002</td>
-                    <td class="actions admin-only">
-                        <button class="btn btn-edit" data-id="AV-002">Editar</button>
-                        <button class="btn btn-delete">Excluir</button>
-                    </td>
-                </tr>
-                <tr>
-                    <td>Computador i5</td>
-                    <td>25</td>
-                    <td>IT-003</td>
-                    <td class="actions admin-only">
-                        <button class="btn btn-edit" data-id="IT-003">Editar</button>
-                        <button class="btn btn-delete">Excluir</button>
-                    </td>
-                </tr>
+                {% if itens and itens|length > 0 %}
+                    {% for nome, quantidade, item_id in itens %}
+                    <tr>
+                        <td>{{ nome }}</td>
+                        <td>{{ quantidade }}</td>
+                        <td>{{ item_id }}</td>
+                        {% if session.get('usuario_role') and session.get('usuario_role')|lower == 'adm' %}
+                        <td class="actions admin-only">
+                            <button class="btn btn-edit" data-id="{{ item_id }}">Editar</button>
+                            <button class="btn btn-delete">Excluir</button>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="4">Nenhum item encontrado.</td>
+                    </tr>
+                {% endif %}
             </tbody>
         </table>
     </div>
+    </body>
 </html>

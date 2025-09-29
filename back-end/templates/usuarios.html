@@ -12,8 +12,30 @@
       <a href="/logout" class="logout-button">Sair</a>
     </div>
     <h1>Gerenciar Usuários</h1>
-    <p>Lista de usuários (placeholder). Apenas administradores devem ver esta página.</p>
+    <p>Lista de usuários. Apenas administradores podem ver e gerenciar contas.</p>
     <p><a href="/cadastro">Criar novo usuário</a></p>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Nome</th>
+          <th>E-mail</th>
+          <th>Role</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if usuarios and usuarios|length > 0 %}
+          {% for nome, email, role in usuarios %}
+          <tr>
+            <td>{{ nome }}</td>
+            <td>{{ email }}</td>
+            <td>{{ role }}</td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="3">Nenhum usuário encontrado.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
     <p><a href="/index.html">Voltar ao menu</a></p>
   </div>
 </body>
