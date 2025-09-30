@@ -260,6 +260,9 @@ def calendario():
     if check:
         return check
     # Pull reservations from emprestimo table and pass to template
+    current_user_email = session.get('usuario_logado')
+    current_user_role = session.get('usuario_role')
+    
     cursor = mydb.cursor()
     try:
         cursor.execute("SELECT nome, email, role FROM usuarios WHERE email = %s", (current_user_email,))
@@ -276,7 +279,7 @@ def calendario():
             current_user = {
                 'id': 1,
                 'nome': 'Usuário',
-                'email': current_user_email,
+                'email': current_user_email,  
                 'role': current_user_role or 'professor'
             }
 
