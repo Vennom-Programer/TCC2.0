@@ -1,4 +1,21 @@
 document.addEventListener('DOMContentLoaded', function() {
+      // Get current user data from HTML element
+      const userDataElement = document.getElementById('user-data');
+      const currentUserData = userDataElement ? {
+        id: parseInt(userDataElement.dataset.id),
+        nome: userDataElement.dataset.nome,
+        email: userDataElement.dataset.email,
+        role: userDataElement.dataset.role
+      } : {
+        id: 1,
+        nome: 'Usuário',
+        email: 'user@example.com',
+        role: 'professor'
+      };
+      
+      // Users provided by backend (for admin selection)
+      const allUsers = Array.isArray(window.__USERS__) ? window.__USERS__ : [];
+      
       // Elementos DOM
       const calendarDays = document.getElementById('calendarDays');
       const monthYearElement = document.getElementById('monthYear');
@@ -19,7 +36,6 @@ document.addEventListener('DOMContentLoaded', function() {
       const spaceSelect = document.getElementById('spaceSelect');
       const reservationDetails = document.getElementById('reservationDetails');
       const resourceOptions = document.querySelectorAll('.resource-option');
-      const userSelect = document.getElementById('userSelect');
       const filterOptions = document.querySelectorAll('.filter-option');
       const reservationsPopup = document.getElementById('reservationsPopup');
       const popupTitle = document.getElementById('popupTitle');
@@ -34,7 +50,7 @@ document.addEventListener('DOMContentLoaded', function() {
       let isCancelMode = false;
       let selectedResourceType = null;
       let selectedResource = null;
-      let currentUser = 'user1';
+      let currentUser = currentUserData.id.toString(); // Use server data
       let currentFilter = 'all';
       let popupTimeout = null;
       
@@ -79,19 +95,30 @@ document.addEventListener('DOMContentLoaded', function() {
         'sala-reuniao': 'Sala de Reunião'
       };
       
-      const userNames = {
-        'user1': 'João Silva',
-        'user2': 'Maria Santos',
-        'user3': 'Pedro Oliveira',
-        'user4': 'Ana Costa'
+      // Build user maps (name and color) from backend list plus current
+      const userNames = {};
+      const userColors = {};
+      const colorPalette = ['#3498db', '#e67e22', '#2ecc71', '#9b59b6', '#e74c3c', '#16a085', '#8e44ad', '#c0392b'];
+      let colorIndex = 0;
+      const ensureColor = (id) => {
+        if (!userColors[id]) {
+          userColors[id] = colorPalette[colorIndex % colorPalette.length];
+          colorIndex += 1;
+        }
       };
-      
-      const userColors = {
-        'user1': '#e74c3c',
-        'user2': '#3498db',
-        'user3': '#2ecc71',
-        'user4': '#f39c12'
-      };
+
+      // Seed with backend users
+      allUsers.forEach(u => {
+        const uid = String(u.id);
+        userNames[uid] = u.nome;
+        ensureColor(uid);
+      });
+      // Ensure current user exists
+      if (currentUserData && currentUserData.id != null) {
+        const uid = String(currentUserData.id);
+        if (!userNames[uid]) userNames[uid] = currentUserData.nome || 'Usuário';
+        ensureColor(uid);
+      }
       
       // Funções de utilidade
       function getReservations() {
@@ -636,11 +663,17 @@ document.addEventListener('DOMContentLoaded', function() {
         updateReservationDetails();
       });
       
-      // Alterar usuário
-      userSelect.addEventListener('change', function() {
-        currentUser = this.value;
-        generateCalendar();
-      });
+      // Admin user selection (if dropdown exists)
+      const userSelect = document.getElementById('userSelect');
+      if (userSelect) {
+        userSelect.addEventListener('change', function() {
+          currentUser = String(this.value);
+          generateCalendar();
+          if (selectedDay) {
+            generateTimeSlots();
+          }
+        });
+      }
       
       // Aplicar filtro
       filterOptions.forEach(option => {

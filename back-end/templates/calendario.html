@@ -20,13 +20,14 @@
     
     <div class="user-controls">
       <div style="display: flex; gap: 10px; align-items: center;">
-        <label for="userSelect">Usuário:</label>
-        <select class="user-select" id="userSelect">
-          <option value="user1">João Silva</option>
-          <option value="user2">Maria Santos</option>
-          <option value="user3">Pedro Oliveira</option>
-          <option value="user4">Ana Costa</option>
-        </select>
+        <div class="user-info">
+          <i class="fas fa-user"></i>
+          <span>Usuário: {{ current_user.nome }}</span>
+        </div>
+        {% if current_user.role and current_user.role|lower == 'adm' %}
+        <div style="display:flex; gap:8px; align-items:center;">
+        </div>
+        {% endif %}
       </div>
       
       <div style="display: flex; gap: 10px;">
@@ -153,6 +154,16 @@
       </div>
     </div>
   </div>
+  <!-- Data for JavaScript -->
+  <div id="user-data" style="display: none;" 
+       data-id="{{ current_user.id }}" 
+       data-nome="{{ current_user.nome }}" 
+       data-email="{{ current_user.email }}" 
+       data-role="{{ current_user.role }}">
+  </div>
+  <script>
+    window.__USERS__ = `{{ usuarios | tojson | safe }}`;
+  </script>
   <script src="/static/js/calendario.js"></script>
 </body>
 </html>
