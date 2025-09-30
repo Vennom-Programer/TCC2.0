@@ -259,22 +259,18 @@ def calendario():
     check = require_login_or_redirect()
     if check:
         return check
-    
-    # Get current logged user info
-    current_user_email = session.get('usuario_logado')
-    current_user_role = session.get('usuario_role')
-    
-    # Get user details from database
+    # Pull reservations from emprestimo table and pass to template
     cursor = mydb.cursor()
     try:
-        cursor.execute("SELECT id, nome, email, role FROM usuarios WHERE email = %s", (current_user_email,))
+        cursor.execute("SELECT nome, email, role FROM usuarios WHERE email = %s", (current_user_email,))
         user_row = cursor.fetchone()
+
         if user_row:
             current_user = {
-                'id': user_row[0],
-                'nome': user_row[1],
-                'email': user_row[2],
-                'role': user_row[3]
+                'id': 1,
+                'nome': user_row[0],
+                'email': user_row[1],
+                'role': user_row[2]
             }
         else:
             current_user = {
@@ -283,6 +279,7 @@ def calendario():
                 'email': current_user_email,
                 'role': current_user_role or 'professor'
             }
+
     except Exception:
         current_user = {
             'id': 1,
@@ -290,22 +287,18 @@ def calendario():
             'email': current_user_email,
             'role': current_user_role or 'professor'
         }
-    cursor.close()
-    
-    # Pull reservations from emprestimo table and pass to template
-    cursor = mydb.cursor()
-    try:
-        cursor.execute("SELECT id_usuario, id_item, data_realizacao, data_reserva, status FROM emprestimo")
-        rows = cursor.fetchall()
-    except Exception:
-        rows = []
+
+    # Buscar reservas
+    cursor.execute("SELECT id_usuario, id_itens, data_realizacao_reserva, data_reserva, status FROM emprestimo")
+    rows = cursor.fetchall()
     cursor.close()
 
     reservas = []
     for r in rows:
-        # r may contain date/datetime objects; convert to ISO strings for JSON
+        # Converter datas para string se forem datetime
         data_realizacao = r[2].isoformat() if hasattr(r[2], 'isoformat') else (str(r[2]) if r[2] is not None else None)
         data_reserva = r[3].isoformat() if hasattr(r[3], 'isoformat') else (str(r[3]) if r[3] is not None else None)
+
         reservas.append({
             'id_usuario': r[0],
             'id_item': r[1],
@@ -314,22 +307,7 @@ def calendario():
             'status': r[4]
         })
 
-    # Fetch list of users to populate selection (ordered by name)
-    usuarios = []
-    try:
-        cursor = mydb.cursor()
-        cursor.execute("SELECT id, nome FROM usuarios ORDER BY nome ASC")
-        usuarios_rows = cursor.fetchall()
-        cursor.close()
-        for u in usuarios_rows:
-            usuarios.append({ 'id': u[0], 'nome': u[1] })
-    except Exception:
-        try:
-            cursor.close()
-        except Exception:
-            pass
-
-    return render_template('calendario.html', reservas=reservas, current_user=current_user, usuarios=usuarios)
+    return render_template('calendario.html', reservas=reservas)
 
 
 @app.route('/relatorios')

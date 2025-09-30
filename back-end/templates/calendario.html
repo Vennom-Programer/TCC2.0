@@ -26,12 +26,6 @@
         </div>
         {% if current_user.role and current_user.role|lower == 'adm' %}
         <div style="display:flex; gap:8px; align-items:center;">
-          <label for="userSelect">Agendar como:</label>
-          <select class="user-select" id="userSelect">
-            {% for u in usuarios %}
-              <option value="{{ u.id }}" {% if u.id == current_user.id %}selected{% endif %}>{{ u.nome }}</option>
-            {% endfor %}
-          </select>
         </div>
         {% endif %}
       </div>
@@ -168,7 +162,7 @@
        data-role="{{ current_user.role }}">
   </div>
   <script>
-    window.__USERS__ = {{ usuarios | tojson | safe }};
+    window.__USERS__ = `{{ usuarios | tojson | safe }}`;
   </script>
   <script src="/static/js/calendario.js"></script>
 </body>
