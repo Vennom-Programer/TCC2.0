@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, session, url_for
+from flask import Flask, render_template, request, redirect, session, url_for, jsonify
 import mysql.connector
 
 app = Flask(__name__)
@@ -52,6 +52,22 @@ def require_login_or_redirect():
     if db_role:
         session['usuario_role'] = db_role
     return None
+
+def get_user_data(email):
+    """Query the database for the given user's complete data. Returns dict or None."""
+    try:
+        cursor = mydb.cursor(dictionary=True)
+        cursor.execute("SELECT numeroDaMatricula, email, senha, nome, role FROM usuarios WHERE email = %s", (email,))
+        user = cursor.fetchone()
+        cursor.close()
+        return user
+    except Exception as e:
+        print(f"Erro ao buscar dados do usuário: {e}")
+        try:
+            cursor.close()
+        except Exception:
+            pass
+        return None
 
 
 
@@ -260,39 +276,30 @@ def calendario():
     if check:
         return check
 
-    # Get current logged user info
+    # Get current logged user info from database
     current_user_email = session.get('usuario_logado')
-    current_user_role = session.get('usuario_role')
-
-    cursor = mydb.cursor()
-    try:
-        cursor.execute("SELECT nome, email, role FROM usuarios WHERE email = %s", (current_user_email,))
-        user_row = cursor.fetchone()
-
-        if user_row:
-            current_user = {
-                'id': 1,
-                'nome': user_row[0],
-                'email': user_row[1],
-                'role': user_row[2]
-            }
-        else:
-            current_user = {
-                'id': 1,
-                'nome': 'Usuário',
-                'email': current_user_email,
-                'role': current_user_role or 'professor'
-            }
-
-    except Exception:
-        current_user = {
-            'id': 1,
-            'nome': 'Usuário',
-            'email': current_user_email,
-            'role': current_user_role or 'professor'
-        }
+    
+    # Buscar dados completos do usuário no banco - CORRIGIDO: passando o email como argumento
+    current_user_db = get_user_data(current_user_email)
+    
+    if not current_user_db:
+        # Se não encontrou no banco, limpa a sessão e redireciona
+        session.pop('usuario_logado', None)
+        session.pop('usuario_role', None)
+        return redirect('/login?error=user_not_found')
+    
+    # Atualizar sessão com dados do banco (autoritativos)
+    session['usuario_role'] = current_user_db['role']
+    
+    current_user = {
+        'numeroDaMatricula': current_user_db['numeroDaMatricula'],
+        'nome': current_user_db['nome'],
+        'email': current_user_db['email'],
+        'role': current_user_db['role']
+    }
 
     # Buscar reservas
+    cursor = mydb.cursor()
     cursor.execute("SELECT id_usuario, id_itens, data_realizacao_reserva, data_reserva, status FROM emprestimo")
     rows = cursor.fetchall()
     cursor.close()
@@ -311,23 +318,202 @@ def calendario():
             'status': r[4]
         })
 
-        
+    # Buscar lista de usuários (apenas para admins)
     usuarios = []
-    try:
-        cursor = mydb.cursor()
-        cursor.execute("SELECT id, nome FROM usuarios ORDER BY nome ASC")
-        usuarios_rows = cursor.fetchall()
-        cursor.close()
-        for u in usuarios_rows:
-            usuarios.append({ 'id': u[0], 'nome': u[1] })
-    except Exception:
+    if current_user_db['role'] == 'adm':
         try:
+            cursor = mydb.cursor()
+            cursor.execute("SELECT numeroDaMatricula, nome FROM usuarios ORDER BY nome ASC")
+            usuarios_rows = cursor.fetchall()
             cursor.close()
-        except Exception:
-            pass
+            for u in usuarios_rows:
+                usuarios.append({ 'numeroDaMatricula': u[0], 'nome': u[1] })
+        except Exception as e:
+            print(f"Erro ao buscar usuários: {e}")
+            try:
+                cursor.close()
+            except Exception:
+                pass
 
     return render_template('calendario.html', reservas=reservas, current_user=current_user, usuarios=usuarios)
+# =============================================
+# NOVAS ROTAS API PARA O CALENDÁRIO
+# =============================================
 
+@app.route('/api/reservas', methods=['GET'])
+def api_get_reservas():
+    """Retorna todas as reservas do banco de dados"""
+    check = require_login_or_redirect()
+    if check:
+        return jsonify({'error': 'Não autorizado'}), 401
+    
+    # Verificar usuário no banco - CORRIGIDO: passando o email como argumento
+    current_user_email = session.get('usuario_logado')
+    current_user_db = get_user_data(current_user_email)
+    
+    if not current_user_db:
+        return jsonify({'error': 'Usuário não encontrado'}), 401
+    
+    try:
+        cursor = mydb.cursor(dictionary=True)
+        
+        # Se não for admin, mostrar apenas as próprias reservas
+        if current_user_db['role'] != 'adm':
+            cursor.execute("""
+                SELECT e.numeroDaMatricula, e.id_usuario, e.id_itens, e.data_realizacao_reserva, 
+                       e.data_reserva, e.status, u.nome as usuario_nome,
+                       i.Nome as item_nome
+                FROM emprestimo e
+                LEFT JOIN usuarios u ON e.id_usuario = u.numeroDaMatricula
+                LEFT JOIN itens i ON e.id_itens = i.numeroDaMatricula
+                WHERE u.email = %s
+                ORDER BY e.data_reserva
+            """, (current_user_email,))
+        else:
+            # Admin vê todas as reservas
+            cursor.execute("""
+                SELECT e.numeroDaMatricula, e.id_usuario, e.id_itens, e.data_realizacao_reserva, 
+                       e.data_reserva, e.status, u.nome as usuario_nome,
+                       i.Nome as item_nome
+                FROM emprestimo e
+                LEFT JOIN usuarios u ON e.id_usuario = u.numeroDaMatricula
+                LEFT JOIN itens i ON e.id_itens = i.numeroDaMatricula
+                ORDER BY e.data_reserva
+            """)
+            
+        reservas_db = cursor.fetchall()
+        cursor.close()
+        
+        # Resto do código permanece igual...
+        reservas_formatadas = {}
+        for r in reservas_db:
+            data_key = r['data_reserva'].strftime('%Y-%m-%d') if r['data_reserva'] else None
+            if data_key:
+                if data_key not in reservas_formatadas:
+                    reservas_formatadas[data_key] = {}
+                
+                horario_key = '1'
+                if r['data_realizacao_reserva']:
+                    hora = r['data_realizacao_reserva'].hour
+                    if 7 <= hora < 12:
+                        horario_key = '1'
+                    elif 13 <= hora < 17:
+                        horario_key = '6'  
+                    elif 19 <= hora < 22:
+                        horario_key = '10'
+                
+                reserva_key = f"{horario_key}_{r['id_itens']}"
+                
+                reservas_formatadas[data_key][reserva_key] = {
+                    'numeroDaMatricula': r['numeroDaMatricula'],
+                    'reserved': True,
+                    'resource': str(r['id_itens']),
+                    'resourceName': r['item_nome'] or 'Recurso',
+                    'userId': r['id_usuario'],
+                    'userName': r['usuario_nome'],
+                    'originalSlotKey': horario_key,
+                    'timeRange': r['data_realizacao_reserva'].strftime('%H:%M') if r['data_realizacao_reserva'] else '07:30-08:20'
+                }
+        
+        return jsonify({'reservas': reservas_formatadas})
+        
+    except Exception as e:
+        print(f"Erro ao buscar reservas: {e}")
+        return jsonify({'error': 'Erro interno do servidor'}), 500
+    
+@app.route('/api/reservas', methods=['POST'])
+def api_create_reserva():
+    """Cria uma nova reserva"""
+    check = require_login_or_redirect()
+    if check:
+        return jsonify({'error': 'Não autorizado'}), 401
+    
+    # Verificar usuário no banco - CORRIGIDO: passando o email como argumento
+    current_user_email = session.get('usuario_logado')
+    current_user_db = get_user_data(current_user_email)
+    
+    if not current_user_db:
+        return jsonify({'error': 'Usuário não encontrado'}), 401
+    
+    try:
+        data = request.get_json()
+        data_reserva = data.get('data_reserva')
+        horario = data.get('horario')
+        recurso = data.get('recurso')
+        
+        # Para não-admins, usar o próprio ID do usuário
+        if current_user_db['role'] != 'adm':
+            id_usuario = current_user_db['numeroDaMatricula']
+        else:
+            id_usuario = data.get('id_usuario', current_user_db['numeroDaMatricula'])
+        
+        # Resto do código permanece igual...
+        from datetime import datetime
+        
+        data_obj = datetime.strptime(data_reserva, '%Y-%m-%d')
+        horario_inicio = horario.split(' às ')[0]
+        data_realizacao = datetime.strptime(f"{data_reserva} {horario_inicio}", '%Y-%m-%d %H:%M')
+        
+        cursor = mydb.cursor()
+        cursor.execute("""
+            INSERT INTO emprestimo (id_usuario, id_itens, data_realizacao_reserva, data_reserva, status)
+            VALUES (%s, %s, %s, %s, 'reservado')
+        """, (id_usuario, recurso, data_realizacao, data_obj))
+        
+        mydb.commit()
+        reserva_id = cursor.lastrowid
+        cursor.close()
+        
+        return jsonify({
+            'success': True,
+            'reserva_id': reserva_id,
+            'message': 'Reserva criada com sucesso'
+        })
+        
+    except Exception as e:
+        print(f"Erro ao criar reserva: {e}")
+        return jsonify({'error': 'Erro interno do servidor'}), 500
+    
+@app.route('/api/reservas/<int:reserva_id>', methods=['DELETE'])
+def api_delete_reserva(reserva_id):
+    """Cancela uma reserva existente"""
+    check = require_login_or_redirect()
+    if check:
+        return jsonify({'error': 'Não autorizado'}), 401
+    
+    # Verificar usuário no banco - CORRIGIDO: passando o email como argumento
+    current_user_email = session.get('usuario_logado')
+    current_user_db = get_user_data(current_user_email)
+    
+    if not current_user_db:
+        return jsonify({'error': 'Usuário não encontrado'}), 401
+    
+    try:
+        cursor = mydb.cursor()
+        
+        # Se não for admin, verificar se a reserva pertence ao usuário
+        if current_user_db['role'] != 'adm':
+            cursor.execute("SELECT id_usuario FROM emprestimo WHERE numeroDaMatricula = %s", (reserva_id,))
+            reserva = cursor.fetchone()
+            
+            if not reserva:
+                return jsonify({'error': 'Reserva não encontrada'}), 404
+                
+            if reserva[0] != current_user_db['numeroDaMatricula']:
+                return jsonify({'error': 'Não autorizado a cancelar esta reserva'}), 403
+        
+        cursor.execute("DELETE FROM emprestimo WHERE numeroDaMatricula = %s", (reserva_id,))
+        mydb.commit()
+        cursor.close()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Reserva cancelada com sucesso'
+        })
+        
+    except Exception as e:
+        print(f"Erro ao cancelar reserva: {e}")
+        return jsonify({'error': 'Erro interno do servidor'}), 500
 
 
 
@@ -359,7 +545,7 @@ def catalogo():
     if check:
         return check
     cursor = mydb.cursor()
-    query = "SELECT Nome, quantidade, id FROM itens"
+    query = "SELECT Nome, quantidade, numeroDaMatricula FROM itens"
     cursor.execute(query)
     itens = cursor.fetchall()
     cursor.close()

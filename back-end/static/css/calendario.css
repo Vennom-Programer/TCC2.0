@@ -820,3 +820,143 @@
         align-self: flex-end;
       }
     }
+
+    /* Estilos para o modo de cancelamento */
+.time-slot.cancellable {
+    border: 2px dashed #e74c3c;
+    position: relative;
+}
+
+.time-slot.cancellable:hover {
+    background-color: #ffeaea;
+    cursor: pointer;
+}
+
+.time-slot.to-cancel {
+    background-color: #ffeaea !important;
+    border: 2px solid #e74c3c !important;
+}
+
+.time-slot.user-cancellable {
+    position: relative;
+}
+
+.cancel-tooltip {
+    position: absolute;
+    bottom: -25px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.time-slot.cancellable:hover .cancel-tooltip {
+    opacity: 1;
+}
+
+/* Modal de resultados */
+.result-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+}
+
+.result-modal {
+    background: white;
+    border-radius: 8px;
+    padding: 0;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.result-modal.success {
+    border-top: 4px solid #2ecc71;
+}
+
+.result-modal.error {
+    border-top: 4px solid #e74c3c;
+}
+
+.result-modal-header {
+    display: flex;
+    align-items: center;
+    padding: 20px;
+    border-bottom: 1px solid #eee;
+}
+
+.result-modal-header i {
+    font-size: 24px;
+    margin-right: 10px;
+}
+
+.result-modal.success .result-modal-header i {
+    color: #2ecc71;
+}
+
+.result-modal.error .result-modal-header i {
+    color: #e74c3c;
+}
+
+.result-modal-header h3 {
+    margin: 0;
+    flex: 1;
+}
+
+.close-result-modal {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #999;
+}
+
+.result-modal-content {
+    padding: 20px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.result-modal-footer {
+    padding: 20px;
+    text-align: right;
+    border-top: 1px solid #eee;
+}
+
+.result-modal-ok-btn {
+    background: #3498db;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.result-modal-ok-btn:hover {
+    background: #2980b9;
+}
+
+/* Indicador visual para admin */
+.time-slot.reserved .time-slot-status::after {
+    margin-left: 5px;
+}
+
+/* Botão de cancelamento ativo */
+.cancel-mode-active {
+    background: #e74c3c !important;
+    color: white !important;
+}
