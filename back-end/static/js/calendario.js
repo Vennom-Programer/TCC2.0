@@ -15,7 +15,6 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // Users provided by backend (for admin selection)
       const allUsers = Array.isArray(window.__USERS__) ? window.__USERS__ : [];
-      
       // Elementos DOM
       const calendarDays = document.getElementById('calendarDays');
       const monthYearElement = document.getElementById('monthYear');
@@ -41,6 +40,10 @@ document.addEventListener('DOMContentLoaded', function() {
       const popupTitle = document.getElementById('popupTitle');
       const popupContent = document.getElementById('popupContent');
       
+      // NOVOS ELEMENTOS: Minhas reservas e Indicador
+      const myReservationsSection = documentElementByid('myReservationsSection');
+      const myReservationsList = document.getElementById('myReservationsList');
+      const cancelModeIndicator = document.getElementById('cancelModeIndicator');
       // Estado da aplicação
       let currentDate = new Date();
       let currentMonth = currentDate.getMonth();
@@ -50,7 +53,6 @@ document.addEventListener('DOMContentLoaded', function() {
       let isCancelMode = false;
       let selectedResourceType = null;
       let selectedResource = null;
-      let currentUser = currentUserData.id.toString(); // Use server data
       let currentFilter = 'all';
       let popupTimeout = null;
       
@@ -92,8 +94,18 @@ document.addEventListener('DOMContentLoaded', function() {
         'lab-quimica': 'Laboratório de Química',
         'lab-fisica': 'Laboratório de Física',
         'auditorio': 'Auditório',
-        'sala-reuniao': 'Sala de Reunião'
       };
+
+      function getCurrentFromDatabase() {
+        return {
+          id: 'user123',
+          name: 'João Silva',
+          email: 'joao.silva@exemplo.com',
+          color: '#e74c3c'
+        };
+      }
+
+      const currentUser = getCurrentFromDatabase();
       
       // Build user maps (name and color) from backend list plus current
       const userNames = {};
@@ -150,6 +162,89 @@ document.addEventListener('DOMContentLoaded', function() {
         const allSlots = [...morningSchedule, ...afternoonSchedule, ...eveningSchedule];
         return allSlots.find(slot => slot.key === key);
       }
+
+      function generateMyReservations() {
+        myReservationsList.innerHTML = '';
+
+        const reservations = getReservations();
+        const dayReservations = reservations[selectedDateKey] || {};
+      }
+
+      const myReservations = Object.values(dayReservations).filter(r =>
+          r.reserved && r.userId === currentUser.id
+        );
+
+        if (myReservations.length === 0) {
+          myReservationsList.innerHTML = '<div class="no-reservations">Nenhuma reserva para este dia</div>';
+          return;
+        }
+
+        // Agrupar reservas por horário
+        const reservationsByTime = {};
+
+        myReservations.forEach(reservation => {
+          const timeSlot = getTimeSlotByKey(reservation.originalSlotKey);
+          if (timeSlot) {
+            const timeKey = `${timeSlot.start}-${timeSlot.end}`;
+            if (!reservationsByTime[timeKey]) {
+              reservationsByTime[timeKey] = {
+                time: `${timeSlot.start} às ${timeSlot.end}`,
+                reservations: []
+              };
+            }
+            myReservationsByTime[timeKey].reservations.push(reservation);
+          }
+        });
+        // Ordenar horários
+        const sortedTimes = Object.keys(myReservationsByTime).sort((a, b) => {
+          return parseInt(a.split('-')[0].replace(':', '')) - parseInt(b.split('-')[0].replace(':', ''));
+        });
+
+        // Criar elementos para cada reserva
+        sortedTimes.forEach(timeKey => {
+          const timeData = myReservationsByTime[timeKey];
+
+          timeData.reservations.forEach(reservation => {
+            const reservationElement = document.createElement('div');
+            reservationElement.classList.add('reservation-detail');
+
+        // Encontrar a chave de reserva
+        const reservationKey = Object.keys(dayReservations).find(key => {
+          dayReservations[key].originalSlotKey === reservation.originalSlotKey &&
+          dayReservations[key].resource === reservation.resource
+        }
+        
+            reservationElement.innerHTML = `
+              <div class="my-reservation-info">
+                <div><strong>Horário:</strong> ${timeData.time}</div>
+                <div><strong>Recurso:</strong> ${reservation.resourceName}</div>
+              </div>
+              <button class="cancel-my-reservation" data-slot-key="${reservationKey}"${isCancelMode ? '' : ' disabled'}>
+              <i class="fas fa-times"></i> ${isCancelMode ? 'Selecionar para Cancelar' : 'Cancelar (Ative o modo de cancelamento)'}>
+              </button>`;
+
+              if (isCancelMode && document.querySelector(.time-slot[data-slot-key="${reservation.originalSlotKey}"].to-cancel)) {
+                reservationElement.classList.add('to-cancel');
+                reservationElement.querySelector('.cancel-my-reservation').innerHTML = '<i class="fas fa-check"></i> Selecionado';
+              }
+
+              myReservationsList.appendChild(reservationElement);
+          });
+        });
+      
+        document.querySelectorAll('.cancel-my-reservation').forEach(button => {
+          button.addEventListener('click', function() {
+            if (!isCancelMode) return;
+
+            const reservationKey = this.dataset.reservationKey;
+            const reservation = dayReservations[reservationKey];
+
+            if (reservation) {
+              const timeSlot = document.querySelector(.time-slot[data-slot-key="${reservation.orginalSlotKey}"]);
+            if (timeSlot) {
+              timeSlot.classList.toggle('to-cancel');
+            }
+        )
       
       // Função para mostrar o popup de reservas
       function showReservationsPopup(dayElement, day, month, year) {
