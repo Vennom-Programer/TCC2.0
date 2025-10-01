@@ -300,13 +300,13 @@ def calendario():
     reservas = []
     for r in rows:
         # Converter datas para string se forem datetime
-        data_realizacao = r[2].isoformat() if hasattr(r[2], 'isoformat') else (str(r[2]) if r[2] is not None else None)
+        data_realizacao_reserva = r[2].isoformat() if hasattr(r[2], 'isoformat') else (str(r[2]) if r[2] is not None else None)
         data_reserva = r[3].isoformat() if hasattr(r[3], 'isoformat') else (str(r[3]) if r[3] is not None else None)
 
         reservas.append({
             'id_usuario': r[0],
             'id_item': r[1],
-            'data_realizacao': data_realizacao,
+            'data_realizacao': data_realizacao_reserva,
             'data_reserva': data_reserva,
             'status': r[4]
         })
