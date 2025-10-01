@@ -259,10 +259,11 @@ def calendario():
     check = require_login_or_redirect()
     if check:
         return check
-    # Pull reservations from emprestimo table and pass to template
+
+    # Get current logged user info
     current_user_email = session.get('usuario_logado')
     current_user_role = session.get('usuario_role')
-    
+
     cursor = mydb.cursor()
     try:
         cursor.execute("SELECT nome, email, role FROM usuarios WHERE email = %s", (current_user_email,))
@@ -279,7 +280,7 @@ def calendario():
             current_user = {
                 'id': 1,
                 'nome': 'Usuário',
-                'email': current_user_email,  
+                'email': current_user_email,
                 'role': current_user_role or 'professor'
             }
 
@@ -310,7 +311,24 @@ def calendario():
             'status': r[4]
         })
 
-    return render_template('calendario.html', reservas=reservas)
+        
+    usuarios = []
+    try:
+        cursor = mydb.cursor()
+        cursor.execute("SELECT id, nome FROM usuarios ORDER BY nome ASC")
+        usuarios_rows = cursor.fetchall()
+        cursor.close()
+        for u in usuarios_rows:
+            usuarios.append({ 'id': u[0], 'nome': u[1] })
+    except Exception:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+
+    return render_template('calendario.html', reservas=reservas, current_user=current_user, usuarios=usuarios)
+
+
 
 
 @app.route('/relatorios')

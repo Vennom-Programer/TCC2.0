@@ -5,13 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <title>Calendário de Disponibilidade</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-  <link rel="stylesheet" href="/static/css/calendario.css">
-  </head>
+  <link rel="stylesheet" href="/static/css/calendario.css" />
+</head>
 <body>
   <div class="calendar-container" role="application" aria-label="Calendário de disponibilidade de recursos">
     <header>
       <a href="/index.html" class="back-button"><i class="fas fa-arrow-left"></i> Voltar</a>
-      <h1 id="monthYear">Junho 2023</h1>
+      <div class="month-navigation">
+        <button id="prevMonth" class="nav-button" aria-label="Mês anterior"><i class="fas fa-chevron-left"></i></button>
+        <h1 id="monthYear"></h1>
+        <button id="nextMonth" class="nav-button" aria-label="Próximo mês"><i class="fas fa-chevron-right"></i></button>
+      </div>
     </header>
     
     <div class="user-controls">
@@ -38,7 +42,7 @@
       </div>
     </div>
     
-    <div class="weekdays" role="row" aria-label="Dias da semana">
+    <div class="weekdays" role="row" aria-label="cd backs da semana">
       <div role="columnheader">Dom</div>
       <div role="columnheader">Seg</div>
       <div role="columnheader">Ter</div>
@@ -77,19 +81,6 @@
       <div class="modal-header">
         <h2 id="modalTitle">Horários para <span id="selectedDate"></span></h2>
         <button class="close-modal" id="closeModal">&times;</button>
-      </div>
-      
-      <!-- Indicador de modo de cancelamento -->
-      <div class="cancel-mode-indicator" id="cancelModeIndicator" style="display: none;">
-        <i class="fas fa-exclamation-triangle"></i> Modo de Cancelamento Ativo - Selecione as reservas que deseja cancelar
-      </div>
-      
-      <!-- Seção: Minhas Reservas -->
-      <div class="my-reservations-section" id="myReservationsSection">
-        <h3><i class="fas fa-user-check"></i> Minhas Reservas</h3>
-        <div class="my-reservations-list" id="myReservationsList">
-          <!-- Minhas reservas serão geradas aqui -->
-        </div>
       </div>
       
       <div class="resource-selection">
