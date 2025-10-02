@@ -58,6 +58,16 @@ document.addEventListener('DOMContentLoaded', function() {
   let currentFilter = 'all';
   let popupTimeout = null;
   
+  // NOVO: Semáforo para operações assíncronas
+  let operationInProgress = false;
+  
+  // CORREÇÃO: Variável global para armazenar reservas
+  let currentReservations = {};
+  
+  // CORREÇÃO: Variáveis para recursos
+  let resourceNames = {};
+  let availableItems = [];
+
   // Constantes
   const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", 
                      "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
@@ -86,18 +96,6 @@ document.addEventListener('DOMContentLoaded', function() {
     { number: '12º', start: '21:10', end: '22:00', key: '12' }
   ];
   
-  const resourceNames = {
-    'projetor': 'Projetor Multimídia',
-    'notebook': 'Notebook',
-    'microfone': 'Microfone',
-    'caixa-som': 'Caixa de Som',
-    'tablet': 'Tablet',
-    'lab-info': 'Laboratório de Informática',
-    'lab-quimica': 'Laboratório de Química',
-    'lab-fisica': 'Laboratório de Física',
-    'auditorio': 'Auditório',
-  };
-
   // Build user maps (name and color) from backend list plus current
   const userNames = {};
   const userColors = {};
@@ -112,7 +110,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Seed with backend users
   allUsers.forEach(u => {
-    const uid = String(u.id);
+    const uid = String(u.numeroDaMatricula); // CORREÇÃO: usar numeroDaMatricula
     userNames[uid] = u.nome;
     ensureColor(uid);
   });
@@ -125,7 +123,126 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   
   // =============================================
-  // FUNÇÕES DE INTEGRAÇÃO COM BACKEND
+  // NOVAS FUNÇÕES PARA CARREGAMENTO DE RECURSOS
+  // =============================================
+
+  // FUNÇÃO CORRIGIDA: Carregar itens nos selects
+  async function loadItemsIntoSelects(tipo = 'all') {
+      try {
+          console.log('Carregando itens do tipo:', tipo);
+          const response = await fetch(`/api/itens/disponiveis?tipo=${tipo}`);
+          
+          if (!response.ok) {
+              throw new Error(`Erro HTTP: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          
+          if (data.error) {
+              console.error('Erro do servidor:', data.error);
+              throw new Error(data.error);
+          }
+          
+          const items = data.itens || [];
+          console.log(`Itens carregados (${tipo}):`, items);
+
+          // Limpar selects
+          if (equipmentSelect) {
+              equipmentSelect.innerHTML = '<option value="">Selecione um equipamento</option>';
+          }
+          if (spaceSelect) {
+              spaceSelect.innerHTML = '<option value="">Selecione um espaço</option>';
+          }
+          
+          // Popular resourceNames com dados do banco
+          items.forEach(item => {
+              resourceNames[item.id] = item.nome;
+              
+              const option = document.createElement('option');
+              option.value = item.id;
+              option.textContent = `${item.nome} (${item.quantidade} disponíveis)`;
+              option.dataset.resourceName = item.nome;
+              
+              // Classificar baseado em id_classificacao
+              if (equipmentSelect && (item.id_classificacao === 1 || item.id_classificacao === 2 || item.id_classificacao === 4)) {
+                  equipmentSelect.appendChild(option.cloneNode(true));
+              }
+              
+              if (spaceSelect && item.id_classificacao === 3) {
+                  spaceSelect.appendChild(option.cloneNode(true));
+              }
+          });
+          
+          // Se não há itens, mostrar mensagem
+          if (items.length === 0) {
+              if (equipmentSelect && tipo === 'equipment') {
+                  equipmentSelect.innerHTML = '<option value="">Nenhum equipamento disponível</option>';
+              }
+              if (spaceSelect && tipo === 'space') {
+                  spaceSelect.innerHTML = '<option value="">Nenhum espaço disponível</option>';
+              }
+          }
+          
+          return items;
+          
+      } catch (error) {
+          console.error('Erro ao carregar itens:', error);
+          
+          // Fallback para selects vazios com mensagem de erro
+          if (equipmentSelect && (tipo === 'equipment' || tipo === 'all')) {
+              equipmentSelect.innerHTML = '<option value="">Erro ao carregar equipamentos</option>';
+          }
+          if (spaceSelect && (tipo === 'space' || tipo === 'all')) {
+              spaceSelect.innerHTML = '<option value="">Erro ao carregar espaços</option>';
+          }
+          
+          return [];
+      }
+  }
+
+  // FUNÇÃO DE DEBUG: Verificar estado dos elementos
+  function debugResourceSelection() {
+      console.log('=== DEBUG RESOURCE SELECTION ===');
+      console.log('selectedResourceType:', selectedResourceType);
+      console.log('selectedResource:', selectedResource);
+      console.log('equipmentSelect options:', equipmentSelect ? equipmentSelect.options.length : 'N/A');
+      console.log('spaceSelect options:', spaceSelect ? spaceSelect.options.length : 'N/A');
+      console.log('resourceNames:', resourceNames);
+      console.log('availableItems:', availableItems);
+      
+      // Verificar se os elementos DOM existem
+      console.log('equipmentSelect exists:', !!equipmentSelect);
+      console.log('spaceSelect exists:', !!spaceSelect);
+      console.log('equipmentOptions exists:', !!equipmentOptions);
+      console.log('spaceOptions exists:', !!spaceOptions);
+      console.log('================================');
+  }
+
+  // NOVA FUNÇÃO: Carregar dados quando o modal abre
+  async function loadModalData() {
+      try {
+          console.log('Carregando dados do modal...');
+          
+          // Carregar tipos de recursos
+          const response = await fetch('/api/recursos/tipos');
+          if (response.ok) {
+              const data = await response.json();
+              console.log('Tipos de recursos:', data.tipos);
+          }
+          
+          // Carregar alguns itens inicialmente (equipamentos)
+          await loadItemsIntoSelects('equipment');
+          
+          // Debug
+          debugResourceSelection();
+          
+      } catch (error) {
+          console.error('Erro ao carregar dados do modal:', error);
+      }
+  }
+
+  // =============================================
+  // FUNÇÕES DE INTEGRAÇÃO COM BACKEND - CORRIGIDAS
   // =============================================
   
   // Função para buscar reservas do backend
@@ -135,6 +252,8 @@ document.addEventListener('DOMContentLoaded', function() {
       if (response.ok) {
         const data = await response.json();
         return data.reservas || {};
+      } else {
+        console.error('Erro na resposta do servidor:', response.status);
       }
     } catch (error) {
       console.error('Erro ao buscar reservas:', error);
@@ -142,7 +261,7 @@ document.addEventListener('DOMContentLoaded', function() {
     return {};
   }
   
-  // Função para salvar reserva no backend
+  // FUNÇÃO CORRIGIDA: Salvar reserva no backend
   async function saveReservationToBackend(reservationData) {
     try {
       const response = await fetch('/api/reservas', {
@@ -156,7 +275,8 @@ document.addEventListener('DOMContentLoaded', function() {
       if (response.ok) {
         return await response.json();
       } else {
-        throw new Error('Erro ao salvar reserva');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Erro ao salvar reserva');
       }
     } catch (error) {
       console.error('Erro:', error);
@@ -164,7 +284,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
   
-  // Função para cancelar reserva no backend
+  // FUNÇÃO CORRIGIDA: Cancelar reserva no backend
   async function cancelReservationInBackend(reservationId) {
     try {
       const response = await fetch(`/api/reservas/${reservationId}`, {
@@ -174,7 +294,8 @@ document.addEventListener('DOMContentLoaded', function() {
       if (response.ok) {
         return await response.json();
       } else {
-        throw new Error('Erro ao cancelar reserva');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Erro ao cancelar reserva');
       }
     } catch (error) {
       console.error('Erro:', error);
@@ -182,15 +303,39 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
   
-  // Função para buscar itens disponíveis do backend
+  // FUNÇÃO CORRIGIDA: Buscar itens disponíveis do backend
   async function getAvailableItems() {
     try {
       const response = await fetch('/api/itens');
       if (response.ok) {
-        return await response.json();
+        const data = await response.json();
+        
+        // CORREÇÃO: Popular resourceNames com dados do banco
+        if (data.itens && Array.isArray(data.itens)) {
+          availableItems = data.itens;
+          data.itens.forEach(item => {
+            resourceNames[item.id] = item.nome; // CORREÇÃO: usar id como chave
+          });
+        }
+        
+        return data.itens || [];
       }
     } catch (error) {
       console.error('Erro ao buscar itens:', error);
+    }
+    return [];
+  }
+
+  // NOVA FUNÇÃO: Buscar usuários (para admin)
+  async function getAvailableUsers() {
+    try {
+      const response = await fetch('/api/admin/usuarios');
+      if (response.ok) {
+        const data = await response.json();
+        return data.usuarios || [];
+      }
+    } catch (error) {
+      console.error('Erro ao buscar usuários:', error);
     }
     return [];
   }
@@ -206,8 +351,9 @@ document.addEventListener('DOMContentLoaded', function() {
       return true;
     }
     
-    // Usuário comum só pode cancelar suas próprias reservas
-    return reservation.userId === currentUserData.id;
+    // CORREÇÃO: Usuário comum só pode cancelar suas próprias reservas
+    // Usar numeroDaMatricula para comparação
+    return String(reservation.userId) === String(currentUserData.id);
   }
 
   // NOVA FUNÇÃO: Obter texto descritivo para o cancelamento
@@ -215,7 +361,8 @@ document.addEventListener('DOMContentLoaded', function() {
     if (selectedToCancel.length === 1) {
       const slot = selectedToCancel[0];
       const reservation = getReservationBySlot(slot);
-      return `Tem certeza que deseja cancelar a reserva de ${reservation.resourceName} no horário ${getTimeSlotText(slot)}?`;
+      const resourceName = reservation?.resourceName || 'Recurso desconhecido';
+      return `Tem certeza que deseja cancelar a reserva de ${resourceName} no horário ${getTimeSlotText(slot)}?`;
     } else {
       return `Tem certeza que deseja cancelar ${selectedToCancel.length} reservas selecionadas?`;
     }
@@ -224,12 +371,13 @@ document.addEventListener('DOMContentLoaded', function() {
   // NOVA FUNÇÃO: Obter reserva por slot
   function getReservationBySlot(slotElement) {
     const slotKey = slotElement.dataset.slotKey;
-    const reservations = getReservations();
-    const dayReservations = reservations[selectedDateKey] || {};
-    const reservationKey = Object.keys(dayReservations).find(key => 
-      dayReservations[key].originalSlotKey === slotKey
+    const dayReservations = currentReservations[selectedDateKey] || {};
+    
+    const reservationEntry = Object.entries(dayReservations).find(([key, reservation]) => 
+      reservation.originalSlotKey === slotKey
     );
-    return reservationKey ? dayReservations[reservationKey] : null;
+    
+    return reservationEntry ? reservationEntry[1] : null;
   }
 
   // NOVA FUNÇÃO: Obter texto do horário
@@ -238,51 +386,47 @@ document.addEventListener('DOMContentLoaded', function() {
     return timeRange ? timeRange.textContent : 'horário desconhecido';
   }
 
-  // NOVA FUNÇÃO: Processar cancelamento individual
+  // FUNÇÃO MELHORADA: Processar cancelamento individual
   async function processSingleCancellation(slotElement) {
     const slotKey = slotElement.dataset.slotKey;
-    const reservations = await getReservations();
-    const dayReservations = reservations[selectedDateKey] || {};
-    const reservationKey = Object.keys(dayReservations).find(key => 
-      dayReservations[key].originalSlotKey === slotKey
+    const dayReservations = currentReservations[selectedDateKey] || {};
+    
+    // Encontrar a reserva pelo slot key
+    const reservationEntry = Object.entries(dayReservations).find(([key, reservation]) => 
+      reservation.originalSlotKey === slotKey
     );
     
-    if (reservationKey && dayReservations[reservationKey].id) {
-      const reservation = dayReservations[reservationKey];
+    if (reservationEntry) {
+      const [reservationKey, reservation] = reservationEntry;
       
       // Verificar permissão
       if (!canUserCancelReservation(reservation)) {
         throw new Error('Você não tem permissão para cancelar esta reserva.');
       }
       
-      await cancelReservationInBackend(dayReservations[reservationKey].id);
+      // CORREÇÃO: Usar reservation.id que vem do backend
+      await cancelReservationInBackend(reservation.id);
       return { success: true, resourceName: reservation.resourceName };
     }
     
     throw new Error('Reserva não encontrada.');
   }
 
-  // NOVA FUNÇÃO: Cancelar reservas selecionadas
+  // NOVA FUNÇÃO CORRIGIDA: Cancelar reservas selecionadas com Promise.all
   async function cancelSelectedReservations(selectedToCancel) {
-    const results = {
-      success: [],
-      failed: []
+    const promises = selectedToCancel.map(slot => 
+      processSingleCancellation(slot).catch(error => ({
+        success: false,
+        error: error.message,
+        slot: slot
+      }))
+    );
+    
+    const results = await Promise.all(promises);
+    return {
+      success: results.filter(r => r.success),
+      failed: results.filter(r => !r.success)
     };
-    
-    // Processar cada cancelamento individualmente
-    for (const slot of selectedToCancel) {
-      try {
-        const result = await processSingleCancellation(slot);
-        results.success.push(result);
-      } catch (error) {
-        results.failed.push({
-          slot: slot,
-          error: error.message
-        });
-      }
-    }
-    
-    return results;
   }
 
   // NOVA FUNÇÃO: Mostrar resultados do cancelamento
@@ -363,19 +507,30 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // NOVA FUNÇÃO: Atualizar interface após cancelamento
+  // NOVA FUNÇÃO CORRIGIDA: Atualizar interface após cancelamento com semáforo
   async function refreshInterfaceAfterCancellation() {
-    // Atualizar todas as visualizações
-    await generateTimeSlots();
-    await generateMyReservations();
-    await generateCalendar();
+    if (operationInProgress) return;
+    operationInProgress = true;
     
-    // Sair do modo de cancelamento
-    isCancelMode = false;
-    updateCancelButton();
-    updateCancelModeIndicator();
-    await generateMyReservations(); // Atualizar botões para modo normal
-    updateButtonStates();
+    try {
+      // CORREÇÃO: Recarregar reservas do backend primeiro
+      currentReservations = await getReservationsFromBackend();
+      
+      await Promise.all([
+        generateTimeSlots(),
+        generateMyReservations(),
+        generateCalendar()
+      ]);
+      
+      // Sair do modo de cancelamento
+      isCancelMode = false;
+      updateCancelButton();
+      updateCancelModeIndicator();
+      await generateMyReservations(); // Atualizar botões para modo normal
+      updateButtonStates();
+    } finally {
+      operationInProgress = false;
+    }
   }
 
   // NOVA FUNÇÃO: Destacar reservas que podem ser canceladas
@@ -409,44 +564,24 @@ document.addEventListener('DOMContentLoaded', function() {
   // FUNÇÕES EXISTENTES ATUALIZADAS
   // =============================================
   
+  // NOVA FUNÇÃO: Limpeza de event listeners
+  function cleanupEventListeners(selector) {
+    document.querySelectorAll(selector).forEach(element => {
+      const newElement = element.cloneNode(true);
+      element.parentNode.replaceChild(newElement, element);
+    });
+  }
+
   // Funções de utilidade
   async function getReservations() {
-    // Tenta buscar do backend primeiro, depois fallback para localStorage
+    // Tenta buscar do backend primeiro
     const backendReservations = await getReservationsFromBackend();
-    if (Object.keys(backendReservations).length > 0) {
-      return backendReservations;
-    }
-    
-    // Fallback para localStorage (para desenvolvimento)
-    const reservations = localStorage.getItem('reservations');
-    return reservations ? JSON.parse(reservations) : {};
-  }
-  
-  async function saveReservations(reservations) {
-    try {
-      // Para cada reserva nova, enviar para o backend
-      for (const dateKey in reservations) {
-        for (const slotKey in reservations[dateKey]) {
-          const reservation = reservations[dateKey][slotKey];
-          if (reservation.reserved && !reservation.id) {
-            await saveReservationToBackend({
-              data_reserva: dateKey,
-              horario: reservation.timeRange,
-              recurso: reservation.resource,
-              id_usuario: currentUserData.id
-            });
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Erro ao sincronizar com backend, usando localStorage:', error);
-      // Fallback para localStorage
-      localStorage.setItem('reservations', JSON.stringify(reservations));
-    }
+    currentReservations = backendReservations; // Armazenar globalmente
+    return backendReservations;
   }
   
   function getDateKey(day, month, year) {
-    return `${year}-${month + 1}-${day}`;
+    return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
   }
 
   function isPastDate(day, month, year) {
@@ -466,16 +601,31 @@ document.addEventListener('DOMContentLoaded', function() {
     return allSlots.find(slot => slot.key === key);
   }
 
+  // NOVA FUNÇÃO: Validar se pode selecionar horário
+  function canSelectTimeSlot(slot) {
+    // Verificar se já está reservado
+    if (slot.classList.contains('reserved')) return false;
+    
+    // Verificar se está no modo de cancelamento
+    if (isCancelMode) return false;
+    
+    // Verificar se é horário passado
+    if (slot.classList.contains('past')) return false;
+    
+    return true;
+  }
+
   // NOVA FUNÇÃO: Gerar minhas reservas no modal
   async function generateMyReservations() {
+    if (!myReservationsList) return;
+    
     myReservationsList.innerHTML = '';
     
-    const reservations = await getReservations();
-    const dayReservations = reservations[selectedDateKey] || {};
+    const dayReservations = currentReservations[selectedDateKey] || {};
     
-    // Filtrar apenas minhas reservas
+    // CORREÇÃO: Filtrar apenas minhas reservas usando numeroDaMatricula
     const myReservations = Object.values(dayReservations).filter(reservation => 
-      reservation.reserved && reservation.userId === currentUserData.id
+      reservation.reserved && String(reservation.userId) === String(currentUserData.id)
     );
     
     if (myReservations.length === 0) {
@@ -513,18 +663,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const reservationElement = document.createElement('div');
         reservationElement.classList.add('my-reservation-item');
         
-        // Encontrar a chave da reserva
-        const reservationKey = Object.keys(dayReservations).find(key => 
-          dayReservations[key].originalSlotKey === reservation.originalSlotKey && 
-          dayReservations[key].resource === reservation.resource
-        );
-        
         reservationElement.innerHTML = `
           <div class="my-reservation-info">
             <div class="my-reservation-time">${timeData.time}</div>
             <div class="my-reservation-resource">${reservation.resourceName}</div>
           </div>
-          <button class="cancel-reservation-btn" data-reservation-key="${reservationKey}" ${isCancelMode ? '' : 'disabled'}>
+          <button class="cancel-reservation-btn" data-slot-key="${reservation.originalSlotKey}" ${isCancelMode ? '' : 'disabled'}>
             <i class="fas fa-times"></i> ${isCancelMode ? 'Selecionar para Cancelar' : 'Cancelar'}
           </button>
         `;
@@ -539,30 +683,30 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     });
     
+    // Limpar event listeners antigos antes de adicionar novos
+    cleanupEventListeners('.cancel-reservation-btn');
+    
     // Adicionar eventos aos botões de cancelamento
     document.querySelectorAll('.cancel-reservation-btn').forEach(button => {
       button.addEventListener('click', function() {
         if (!isCancelMode) return;
         
-        const reservationKey = this.dataset.reservationKey;
-        const reservation = dayReservations[reservationKey];
+        const slotKey = this.dataset.slotKey;
+        const timeSlot = document.querySelector(`.time-slot[data-slot-key="${slotKey}"]`);
         
-        if (reservation) {
-          const timeSlot = document.querySelector(`.time-slot[data-slot-key="${reservation.originalSlotKey}"]`);
-          if (timeSlot) {
-            timeSlot.classList.toggle('to-cancel');
-            
-            // Atualizar o texto do botão
-            if (timeSlot.classList.contains('to-cancel')) {
-              this.innerHTML = '<i class="fas fa-check"></i> Selecionado';
-              this.closest('.my-reservation-item').classList.add('to-cancel');
-            } else {
-              this.innerHTML = '<i class="fas fa-times"></i> Selecionar para Cancelar';
-              this.closest('.my-reservation-item').classList.remove('to-cancel');
-            }
-            
-            updateButtonStates();
+        if (timeSlot) {
+          timeSlot.classList.toggle('to-cancel');
+          
+          // Atualizar o texto do botão
+          if (timeSlot.classList.contains('to-cancel')) {
+            this.innerHTML = '<i class="fas fa-check"></i> Selecionado';
+            this.closest('.my-reservation-item').classList.add('to-cancel');
+          } else {
+            this.innerHTML = '<i class="fas fa-times"></i> Selecionar para Cancelar';
+            this.closest('.my-reservation-item').classList.remove('to-cancel');
           }
+          
+          updateButtonStates();
         }
       });
     });
@@ -571,17 +715,16 @@ document.addEventListener('DOMContentLoaded', function() {
   // Função para mostrar o popup de reservas
   async function showReservationsPopup(dayElement, day, month, year) {
     const dateKey = getDateKey(day, month, year);
-    const reservations = await getReservations();
-    const dayReservations = reservations[dateKey];
+    const dayReservations = currentReservations[dateKey];
     
     // Limpar conteúdo anterior
-    popupContent.innerHTML = '';
+    if (popupContent) popupContent.innerHTML = '';
     
     // Atualizar título
-    popupTitle.textContent = `Reservas para ${day}/${month + 1}/${year}`;
+    if (popupTitle) popupTitle.textContent = `Reservas para ${day}/${month + 1}/${year}`;
     
     if (!dayReservations || Object.keys(dayReservations).length === 0) {
-      popupContent.innerHTML = '<div class="no-reservations">Nenhuma reserva para este dia</div>';
+      if (popupContent) popupContent.innerHTML = '<div class="no-reservations">Nenhuma reserva para este dia</div>';
     } else {
       // Agrupar reservas por horário
       const reservationsByTime = {};
@@ -609,7 +752,7 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // Criar conteúdo do popup
       if (sortedTimes.length === 0) {
-        popupContent.innerHTML = '<div class="no-reservations">Nenhuma reserva para este dia</div>';
+        if (popupContent) popupContent.innerHTML = '<div class="no-reservations">Nenhuma reserva para este dia</div>';
       } else {
         sortedTimes.forEach(timeKey => {
           const timeData = reservationsByTime[timeKey];
@@ -633,36 +776,38 @@ document.addEventListener('DOMContentLoaded', function() {
             timeElement.appendChild(reservationElement);
           });
           
-          popupContent.appendChild(timeElement);
+          if (popupContent) popupContent.appendChild(timeElement);
         });
       }
     }
     
     // Posicionar o popup
-    const rect = dayElement.getBoundingClientRect();
-    const calendarRect = calendarDays.getBoundingClientRect();
-    
-    let top = rect.bottom + window.scrollY;
-    let left = rect.left + window.scrollX;
-    
-    // Ajustar posição se o popup ultrapassar a tela
-    if (left + 280 > window.innerWidth) {
-      left = window.innerWidth - 280;
+    if (reservationsPopup && calendarDays) {
+      const rect = dayElement.getBoundingClientRect();
+      const calendarRect = calendarDays.getBoundingClientRect();
+      
+      let top = rect.bottom + window.scrollY;
+      let left = rect.left + window.scrollX;
+      
+      // Ajustar posição se o popup ultrapassar a tela
+      if (left + 280 > window.innerWidth) {
+        left = window.innerWidth - 280;
+      }
+      
+      if (top + 300 > window.innerHeight) {
+        top = rect.top + window.scrollY - 300;
+      }
+      
+      reservationsPopup.style.top = top + 'px';
+      reservationsPopup.style.left = left + 'px';
+      reservationsPopup.classList.add('visible');
+      
+      // Configurar timeout para fechar o popup
+      clearTimeout(popupTimeout);
+      popupTimeout = setTimeout(() => {
+        reservationsPopup.classList.remove('visible');
+      }, 5000); // Fechar após 5 segundos
     }
-    
-    if (top + 300 > window.innerHeight) {
-      top = rect.top + window.scrollY - 300;
-    }
-    
-    reservationsPopup.style.top = top + 'px';
-    reservationsPopup.style.left = left + 'px';
-    reservationsPopup.classList.add('visible');
-    
-    // Configurar timeout para fechar o popup
-    clearTimeout(popupTimeout);
-    popupTimeout = setTimeout(() => {
-      reservationsPopup.classList.remove('visible');
-    }, 5000); // Fechar após 5 segundos
   }
   
   // Função para mudar o mês
@@ -680,8 +825,10 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Função para gerar o calendário
   async function generateCalendar() {
+    if (!calendarDays) return;
+    
     calendarDays.innerHTML = '';
-    monthYearElement.textContent = `${monthNames[currentMonth]} ${currentYear}`;
+    if (monthYearElement) monthYearElement.textContent = `${monthNames[currentMonth]} ${currentYear}`;
     
     // Obter o primeiro dia do mês
     const firstDay = new Date(currentYear, currentMonth, 1);
@@ -690,9 +837,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Obter o último dia do mês
     const lastDay = new Date(currentYear, currentMonth + 1, 0);
     const daysInMonth = lastDay.getDate();
-    
-    // Obter reservas
-    const reservations = await getReservations();
     
     // Preencher os dias vazios no início do mês
     for (let i = 0; i < startingDay; i++) {
@@ -716,7 +860,7 @@ document.addEventListener('DOMContentLoaded', function() {
         dayElement.classList.add('past');
       } else {
         const dateKey = getDateKey(day, currentMonth, currentYear);
-        const dayReservations = reservations[dateKey];
+        const dayReservations = currentReservations[dateKey];
         
         // Contar reservas
         let totalReservations = 0;
@@ -728,7 +872,7 @@ document.addEventListener('DOMContentLoaded', function() {
           
           // Contar minhas reservas
           myReservationsCount = Object.values(dayReservations).filter(r => 
-            r.reserved && r.userId === currentUserData.id
+            r.reserved && String(r.userId) === String(currentUserData.id)
           ).length;
         }
         
@@ -776,7 +920,7 @@ document.addEventListener('DOMContentLoaded', function() {
           dayElement.addEventListener('mouseleave', () => {
             clearTimeout(popupTimeout);
             popupTimeout = setTimeout(() => {
-              reservationsPopup.classList.remove('visible');
+              if (reservationsPopup) reservationsPopup.classList.remove('visible');
             }, 300);
           });
         }
@@ -787,13 +931,13 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Adicionar evento para fechar popup ao clicar fora
     document.addEventListener('click', (e) => {
-      if (!reservationsPopup.contains(e.target) && !e.target.closest('.day.available')) {
+      if (reservationsPopup && !reservationsPopup.contains(e.target) && !e.target.closest('.day.available')) {
         reservationsPopup.classList.remove('visible');
       }
     });
   }
   
-  // Função para selecionar um dia - ATUALIZADA
+  // FUNÇÃO CORRIGIDA: Selecionar um dia com await
   async function selectDay(dayElement, day, dayOfWeek) {
     // Remover seleção anterior
     if (selectedDay) {
@@ -810,8 +954,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Mostrar o modal com os horários
     const formattedDate = `${day} de ${monthNames[currentMonth]} de ${currentYear}`;
     
-    selectedDateElement.textContent = formattedDate;
-    modalTitle.textContent = `Horários para ${formattedDate}`;
+    if (selectedDateElement) selectedDateElement.textContent = formattedDate;
+    if (modalTitle) modalTitle.textContent = `Horários para ${formattedDate}`;
     
     // Sair do modo de cancelamento ao selecionar novo dia
     isCancelMode = false;
@@ -822,21 +966,33 @@ document.addEventListener('DOMContentLoaded', function() {
     // Limpar seleções de recursos
     clearResourceSelection();
     
-    // Gerar os horários
-    generateTimeSlots();
+    // CORREÇÃO: Garantir que as reservas estão carregadas
+    if (Object.keys(currentReservations).length === 0) {
+      currentReservations = await getReservationsFromBackend();
+    }
     
-    // Gerar minhas reservas
-    generateMyReservations();
+    // NOVO: Carregar dados do modal
+    await loadModalData();
+    
+    // Gerar os horários COM AWAIT
+    await generateTimeSlots();
+    
+    // Gerar minhas reservas COM AWAIT
+    await generateMyReservations();
     
     // Mostrar o modal
-    modalOverlay.style.display = 'flex';
+    if (modalOverlay) modalOverlay.style.display = 'flex';
     
     // Fechar popup de reservas
-    reservationsPopup.classList.remove('visible');
+    if (reservationsPopup) {
+      reservationsPopup.classList.remove('visible');
+    }
   }
-  
-  // Atualizar indicador de modo de cancelamento
+
+  // Atualizar indicador de modo de cancelamento COM VERIFICAÇÃO DE NULL
   function updateCancelModeIndicator() {
+    if (!cancelModeIndicator) return;
+    
     if (isCancelMode) {
       cancelModeIndicator.style.display = 'block';
     } else {
@@ -846,13 +1002,15 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Limpar seleção de recursos
   function clearResourceSelection() {
-    resourceOptions.forEach(option => {
-      option.classList.remove('selected');
-    });
-    equipmentOptions.classList.remove('visible');
-    spaceOptions.classList.remove('visible');
-    equipmentSelect.value = '';
-    spaceSelect.value = '';
+    if (resourceOptions) {
+      resourceOptions.forEach(option => {
+        option.classList.remove('selected');
+      });
+    }
+    if (equipmentOptions) equipmentOptions.classList.remove('visible');
+    if (spaceOptions) spaceOptions.classList.remove('visible');
+    if (equipmentSelect) equipmentSelect.value = '';
+    if (spaceSelect) spaceSelect.value = '';
     selectedResourceType = null;
     selectedResource = null;
     updateReservationDetails();
@@ -860,20 +1018,23 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Função para gerar os horários de aula
   async function generateTimeSlots() {
+    if (!morningSlots || !afternoonSlots || !eveningSlots) return;
+    
     morningSlots.innerHTML = '';
     afternoonSlots.innerHTML = '';
     eveningSlots.innerHTML = '';
     
-    // Obter reservas
-    const reservations = await getReservations();
-    const dayReservations = reservations[selectedDateKey] || {};
+    const dayReservations = currentReservations[selectedDateKey] || {};
     const selectedDate = new Date(currentYear, currentMonth, parseInt(selectedDateKey.split('-')[2]));
+    
+    // Limpar event listeners antigos
+    cleanupEventListeners('.time-slot');
     
     // Gerar horários da manhã
     morningSchedule.forEach(slot => {
-      const reservation = dayReservations[slot.key];
+      const reservation = Object.values(dayReservations).find(r => r.originalSlotKey === slot.key);
       const isReserved = reservation && reservation.reserved;
-      const isMyReservation = isReserved && reservation.userId === currentUserData.id;
+      const isMyReservation = isReserved && String(reservation.userId) === String(currentUserData.id);
       const isPast = isPastTime(
         selectedDate.getDate(), 
         currentMonth, 
@@ -888,9 +1049,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Gerar horários da tarde
     afternoonSchedule.forEach(slot => {
-      const reservation = dayReservations[slot.key];
+      const reservation = Object.values(dayReservations).find(r => r.originalSlotKey === slot.key);
       const isReserved = reservation && reservation.reserved;
-      const isMyReservation = isReserved && reservation.userId === currentUserData.id;
+      const isMyReservation = isReserved && String(reservation.userId) === String(currentUserData.id);
       const isPast = isPastTime(
         selectedDate.getDate(), 
         currentMonth, 
@@ -905,9 +1066,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Gerar horários da noite
     eveningSchedule.forEach(slot => {
-      const reservation = dayReservations[slot.key];
+      const reservation = Object.values(dayReservations).find(r => r.originalSlotKey === slot.key);
       const isReserved = reservation && reservation.reserved;
-      const isMyReservation = isReserved && reservation.userId === currentUserData.id;
+      const isMyReservation = isReserved && String(reservation.userId) === String(currentUserData.id);
       const isPast = isPastTime(
         selectedDate.getDate(), 
         currentMonth, 
@@ -984,11 +1145,7 @@ document.addEventListener('DOMContentLoaded', function() {
             this.classList.toggle('to-cancel');
             
             // Atualizar o botão correspondente na lista de minhas reservas
-            const reservationKey = Object.keys(getReservations()[selectedDateKey] || {}).find(key => 
-              getReservations()[selectedDateKey][key].originalSlotKey === slot.key
-            );
-            
-            const cancelBtn = document.querySelector(`.cancel-reservation-btn[data-reservation-key="${reservationKey}"]`);
+            const cancelBtn = document.querySelector(`.cancel-reservation-btn[data-slot-key="${slot.key}"]`);
             if (cancelBtn) {
               if (this.classList.contains('to-cancel')) {
                 cancelBtn.innerHTML = '<i class="fas fa-check"></i> Selecionado';
@@ -1012,9 +1169,11 @@ document.addEventListener('DOMContentLoaded', function() {
       
       if (!isCancelMode) {
         timeSlot.addEventListener('click', function() {
-          this.classList.toggle('selected');
-          updateButtonStates();
-          updateReservationDetails();
+          if (canSelectTimeSlot(this)) {
+            this.classList.toggle('selected');
+            updateButtonStates();
+            updateReservationDetails();
+          }
         });
       }
     }
@@ -1024,6 +1183,8 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Atualizar detalhes da reserva
   function updateReservationDetails() {
+    if (!reservationDetails) return;
+    
     const selectedSlots = document.querySelectorAll('.time-slot.selected');
     
     if (selectedSlots.length === 0 || !selectedResource) {
@@ -1035,9 +1196,12 @@ document.addEventListener('DOMContentLoaded', function() {
       return slot.querySelector('.time-range').textContent;
     });
     
+    // CORREÇÃO: Usar resourceNames do banco
+    const resourceName = resourceNames[selectedResource] || selectedResource;
+    
     reservationDetails.innerHTML = `
       <div><strong>Usuário:</strong> ${currentUserData.nome}</div>
-      <div><strong>Recurso:</strong> ${resourceNames[selectedResource]}</div>
+      <div><strong>Recurso:</strong> ${resourceName}</div>
       <div><strong>Horários selecionados:</strong></div>
       <div>${selectedTimes.join(', ')}</div>
     `;
@@ -1045,6 +1209,8 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Função para atualizar o estado dos botões
   function updateButtonStates() {
+    if (!reserveButton || !cancelButton) return;
+    
     if (isCancelMode) {
       const selectedToCancel = document.querySelectorAll('.time-slot.to-cancel');
       cancelButton.disabled = selectedToCancel.length === 0;
@@ -1067,6 +1233,8 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // FUNÇÃO ATUALIZADA: Atualizar aparência do botão de cancelamento
   function updateCancelButton() {
+    if (!cancelButton) return;
+    
     if (isCancelMode) {
       cancelButton.classList.add('cancel-mode-active');
       cancelButton.innerHTML = '<i class="fas fa-times"></i> Confirmar Cancelamento';
@@ -1079,49 +1247,73 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   
   // =============================================
-  // EVENT LISTENERS
+  // EVENT LISTENERS ATUALIZADOS
   // =============================================
   
-  // Selecionar tipo de recurso
-  resourceOptions.forEach(option => {
-    option.addEventListener('click', function() {
-      const type = this.dataset.type;
-      
-      // Desselecionar outros recursos
-      resourceOptions.forEach(opt => opt.classList.remove('selected'));
-      
-      // Selecionar este recurso
-      this.classList.add('selected');
-      selectedResourceType = type;
-      
-      // Mostrar opções apropriadas
-      if (type === 'equipment') {
-        equipmentOptions.classList.add('visible');
-        spaceOptions.classList.remove('visible');
-        spaceSelect.value = '';
-      } else {
-        spaceOptions.classList.add('visible');
-        equipmentOptions.classList.remove('visible');
-        equipmentSelect.value = '';
-      }
-      
-      updateButtonStates();
+  // CORREÇÃO: Selecionar tipo de recurso - CARREGAR ITENS AO SELECIONAR
+  if (resourceOptions) {
+    resourceOptions.forEach(option => {
+      option.addEventListener('click', async function() {
+        const type = this.dataset.type;
+        
+        console.log('Tipo de recurso selecionado:', type);
+        
+        // Desselecionar outros recursos
+        resourceOptions.forEach(opt => opt.classList.remove('selected'));
+        
+        // Selecionar este recurso
+        this.classList.add('selected');
+        selectedResourceType = type;
+        
+        // Mostrar loading
+        if (type === 'equipment' && equipmentSelect) {
+          equipmentSelect.innerHTML = '<option value="">Carregando equipamentos...</option>';
+        } else if (type === 'space' && spaceSelect) {
+          spaceSelect.innerHTML = '<option value="">Carregando espaços...</option>';
+        }
+        
+        // Mostrar opções apropriadas
+        if (type === 'equipment') {
+          if (equipmentOptions) equipmentOptions.classList.add('visible');
+          if (spaceOptions) spaceOptions.classList.remove('visible');
+          if (spaceSelect) spaceSelect.value = '';
+          
+          // CARREGAR EQUIPAMENTOS
+          await loadItemsIntoSelects('equipment');
+        } else {
+          if (spaceOptions) spaceOptions.classList.add('visible');
+          if (equipmentOptions) equipmentOptions.classList.remove('visible');
+          if (equipmentSelect) equipmentSelect.value = '';
+          
+          // CARREGAR ESPAÇOS
+          await loadItemsIntoSelects('space');
+        }
+        
+        // Debug
+        debugResourceSelection();
+        
+        updateButtonStates();
+      });
     });
-  });
+  }
   
   // Selecionar equipamento específico
-  equipmentSelect.addEventListener('change', function() {
-    selectedResource = this.value;
-    updateButtonStates();
-    updateReservationDetails();
-  });
+  if (equipmentSelect) {
+    equipmentSelect.addEventListener('change', function() {
+      selectedResource = this.value;
+      updateButtonStates();
+      updateReservationDetails();
+    });
+  }
   
   // Selecionar espaço específico
-  spaceSelect.addEventListener('change', function() {
-    selectedResource = this.value;
-    updateButtonStates();
-    updateReservationDetails();
-  });
+  if (spaceSelect) {
+    spaceSelect.addEventListener('change', function() {
+      selectedResource = this.value;
+      updateButtonStates();
+      updateReservationDetails();
+    });
+  }
   
   // Admin user selection (if dropdown exists)
   const userSelect = document.getElementById('userSelect');
@@ -1136,217 +1328,244 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   
   // Aplicar filtro
-  filterOptions.forEach(option => {
-    option.addEventListener('click', function() {
-      const filter = this.dataset.filter;
-      
-      // Desselecionar outros filtros
-      filterOptions.forEach(opt => opt.classList.remove('active'));
-      
-      // Selecionar este filtro
-      this.classList.add('active');
-      currentFilter = filter;
-      
-      // Atualizar calendário
-      generateCalendar();
+  if (filterOptions) {
+    filterOptions.forEach(option => {
+      option.addEventListener('click', function() {
+        const filter = this.dataset.filter;
+        
+        // Desselecionar outros filtros
+        filterOptions.forEach(opt => opt.classList.remove('active'));
+        
+        // Selecionar este filtro
+        this.classList.add('active');
+        currentFilter = filter;
+        
+        // Atualizar calendário
+        generateCalendar();
+      });
     });
-  });
+  }
   
   // Inicializar filtro "Todas as reservas" como ativo
-  document.querySelector('.filter-option[data-filter="all"]').classList.add('active');
+  if (filterOptions && filterOptions.length > 0) {
+    const allFilter = document.querySelector('.filter-option[data-filter="all"]');
+    if (allFilter) allFilter.classList.add('active');
+  }
   
   // FUNÇÃO MELHORADA: Alternar entre modos de reserva e cancelamento
-  cancelButton.addEventListener('click', async function() {
-    const reservations = await getReservations();
-    const dayReservations = reservations[selectedDateKey] || {};
-    
-    // Verificar se há reservas que o usuário pode cancelar
-    const userCancellableReservations = Object.values(dayReservations).filter(r => 
-      r.reserved && canUserCancelReservation(r)
-    );
-    
-    if (userCancellableReservations.length === 0) {
-      showResultModal(
-        currentUserData.role === 'adm' 
-          ? 'Não há reservas para cancelar neste dia.'
-          : 'Você não tem reservas para cancelar neste dia.',
-        false
+  if (cancelButton) {
+    cancelButton.addEventListener('click', async function() {
+      if (operationInProgress) return;
+      
+      const dayReservations = currentReservations[selectedDateKey] || {};
+      
+      // Verificar se há reservas que o usuário pode cancelar
+      const userCancellableReservations = Object.values(dayReservations).filter(r => 
+        r.reserved && canUserCancelReservation(r)
       );
-      return;
-    }
-    
-    if (!isCancelMode) {
-      // Entrar no modo de cancelamento
-      isCancelMode = true;
-      updateCancelButton();
-      updateCancelModeIndicator();
-      await generateMyReservations();
       
-      // Desselecionar quaisquer horários selecionados para reserva
-      document.querySelectorAll('.time-slot.selected').forEach(slot => {
-        slot.classList.remove('selected');
-      });
-      
-    } else {
-      // Processar cancelamento
-      const selectedToCancel = document.querySelectorAll('.time-slot.to-cancel');
-      
-      if (selectedToCancel.length === 0) {
-        showResultModal('Selecione pelo menos um horário para cancelar.', false);
+      if (userCancellableReservations.length === 0) {
+        showResultModal(
+          currentUserData.role === 'adm' 
+            ? 'Não há reservas para cancelar neste dia.'
+            : 'Você não tem reservas para cancelar neste dia.',
+          false
+        );
         return;
       }
       
-      // Verificar permissões antes de confirmar
-      const unauthorizedCancellations = Array.from(selectedToCancel).filter(slot => {
-        const reservation = getReservationBySlot(slot);
-        return reservation && !canUserCancelReservation(reservation);
-      });
-      
-      if (unauthorizedCancellations.length > 0) {
-        showResultModal('Você não tem permissão para cancelar algumas das reservas selecionadas.', false);
-        return;
-      }
-      
-      // Confirmar cancelamento com informações detalhadas
-      const confirmationMessage = getCancelConfirmationText(selectedToCancel);
-      
-      if (confirm(confirmationMessage)) {
-        try {
-          // Mostrar indicador de carregamento
-          this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cancelando...';
-          this.disabled = true;
-          
-          // Processar cancelamentos
-          const results = await cancelSelectedReservations(selectedToCancel);
-          
-          // Mostrar resultados
-          showCancellationResults(results);
-          
-          // Atualizar interface
-          await refreshInterfaceAfterCancellation();
-          
-        } catch (error) {
-          console.error('Erro no cancelamento:', error);
-          showResultModal('Erro inesperado ao processar cancelamentos. Tente novamente.', false);
-        } finally {
-          // Restaurar estado do botão
-          this.innerHTML = '<i class="fas fa-times-circle"></i> Cancelar Reservas';
-          this.disabled = false;
+      if (!isCancelMode) {
+        // Entrar no modo de cancelamento
+        isCancelMode = true;
+        updateCancelButton();
+        updateCancelModeIndicator();
+        await generateMyReservations();
+        
+        // Desselecionar quaisquer horários selecionados para reserva
+        document.querySelectorAll('.time-slot.selected').forEach(slot => {
+          slot.classList.remove('selected');
+        });
+        
+      } else {
+        // Processar cancelamento
+        const selectedToCancel = document.querySelectorAll('.time-slot.to-cancel');
+        
+        if (selectedToCancel.length === 0) {
+          showResultModal('Selecione pelo menos um horário para cancelar.', false);
+          return;
+        }
+        
+        // Verificar permissões antes de confirmar
+        const unauthorizedCancellations = Array.from(selectedToCancel).filter(slot => {
+          const reservation = getReservationBySlot(slot);
+          return reservation && !canUserCancelReservation(reservation);
+        });
+        
+        if (unauthorizedCancellations.length > 0) {
+          showResultModal('Você não tem permissão para cancelar algumas das reservas selecionadas.', false);
+          return;
+        }
+        
+        // Confirmar cancelamento com informações detalhadas
+        const confirmationMessage = getCancelConfirmationText(selectedToCancel);
+        
+        if (confirm(confirmationMessage)) {
+          try {
+            // Mostrar indicador de carregamento
+            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cancelando...';
+            this.disabled = true;
+            
+            // Processar cancelamentos
+            const results = await cancelSelectedReservations(selectedToCancel);
+            
+            // Mostrar resultados
+            showCancellationResults(results);
+            
+            // Atualizar interface
+            await refreshInterfaceAfterCancellation();
+            
+          } catch (error) {
+            console.error('Erro no cancelamento:', error);
+            showResultModal('Erro inesperado ao processar cancelamentos. Tente novamente.', false);
+          } finally {
+            // Restaurar estado do botão
+            this.innerHTML = '<i class="fas fa-times-circle"></i> Cancelar Reservas';
+            this.disabled = false;
+          }
         }
       }
-    }
-    
-    updateButtonStates();
-  });
+      
+      updateButtonStates();
+    });
+  }
   
-  // Fazer uma reserva
-  reserveButton.addEventListener('click', async function() {
-    if (this.disabled) return;
-    
-    const selectedSlots = document.querySelectorAll('.time-slot.selected');
-    const reservations = await getReservations();
-    
-    if (!reservations[selectedDateKey]) {
-      reservations[selectedDateKey] = {};
-    }
-    
-    // Verificar se algum dos horários já foi reservado
-    let hasConflict = false;
-    selectedSlots.forEach(slot => {
-      const slotKey = slot.dataset.slotKey;
-      if (reservations[selectedDateKey][slotKey] && reservations[selectedDateKey][slotKey].reserved) {
-        hasConflict = true;
+  // FUNÇÃO MELHORADA: Fazer uma reserva
+  if (reserveButton) {
+    reserveButton.addEventListener('click', async function() {
+      if (this.disabled || operationInProgress) return;
+      
+      const selectedSlots = document.querySelectorAll('.time-slot.selected');
+      
+      if (selectedSlots.length === 0 || !selectedResource) {
+        alert('Selecione pelo menos um horário e um recurso para reservar.');
+        return;
+      }
+      
+      operationInProgress = true;
+      
+      try {
+        // CORREÇÃO: Usar resourceNames do banco
+        const resourceName = resourceNames[selectedResource] || selectedResource;
+        
+        // Criar reservas no backend usando Promise.all para melhor performance
+        const reservationPromises = Array.from(selectedSlots).map(slot => {
+          const slotKey = slot.dataset.slotKey;
+          const timeSlot = getTimeSlotByKey(slotKey);
+          
+          const reservationData = {
+            data_reserva: selectedDateKey,
+            horario: `${timeSlot.start} às ${timeSlot.end}`,
+            recurso: selectedResource,
+            id_usuario: currentUserData.id,
+            resource_name: resourceName
+          };
+          
+          return saveReservationToBackend(reservationData);
+        });
+        
+        const results = await Promise.allSettled(reservationPromises);
+        
+        // Verificar resultados
+        const successful = results.filter(r => r.status === 'fulfilled').length;
+        const failed = results.filter(r => r.status === 'rejected');
+        
+        if (failed.length > 0) {
+          const errorMessages = failed.map(f => f.reason?.message || 'Erro desconhecido').join('\n• ');
+          alert(`${successful} reserva(s) criada(s) com sucesso, mas ${failed.length} falharam:\n• ${errorMessages}`);
+        } else {
+          alert(`${selectedSlots.length} horário(s) reservado(s) com sucesso!`);
+        }
+        
+        // CORREÇÃO: Recarregar reservas do backend
+        currentReservations = await getReservationsFromBackend();
+        
+        // Atualizar a visualização
+        await Promise.all([
+          generateTimeSlots(),
+          generateMyReservations(),
+          generateCalendar()
+        ]);
+        
+        // Desselecionar horários
+        selectedSlots.forEach(slot => {
+          slot.classList.remove('selected');
+        });
+        
+        // Limpar seleção de recurso
+        clearResourceSelection();
+        
+        // Atualizar botões
+        updateButtonStates();
+        
+      } catch (error) {
+        console.error('Erro geral na reserva:', error);
+        alert('Erro ao fazer reserva. Tente novamente.');
+      } finally {
+        operationInProgress = false;
       }
     });
-    
-    if (hasConflict) {
-      alert('Um ou mais horários selecionados já foram reservados. Por favor, atualize a página e tente novamente.');
-      return;
-    }
-    
-    try {
-      // Criar reservas no backend
-      for (const slot of selectedSlots) {
-        const slotKey = slot.dataset.slotKey;
-        const timeSlot = getTimeSlotByKey(slotKey);
-        
-        const reservationData = {
-          data_reserva: selectedDateKey,
-          horario: `${timeSlot.start} às ${timeSlot.end}`,
-          recurso: selectedResource,
-          id_usuario: currentUserData.id,
-          resource_name: resourceNames[selectedResource]
-        };
-        
-        await saveReservationToBackend(reservationData);
-      }
-      
-      // Mostrar mensagem de sucesso
-      alert(`${selectedSlots.length} horário(s) reservado(s) com sucesso!`);
-      
-      // Atualizar a visualização
-      generateTimeSlots();
-      generateMyReservations();
-      generateCalendar();
-      
-      // Desselecionar horários
-      selectedSlots.forEach(slot => {
-        slot.classList.remove('selected');
-      });
-      
-      // Limpar seleção de recurso
-      clearResourceSelection();
-      
-      // Atualizar botões
-      updateButtonStates();
-      
-    } catch (error) {
-      alert('Erro ao fazer reserva. Tente novamente.');
-    }
-  });
+  }
   
   // Fechar modal
-  closeModal.addEventListener('click', function() {
-    modalOverlay.style.display = 'none';
-    isCancelMode = false;
-    updateCancelButton();
-    updateCancelModeIndicator();
-    removeCancellationHighlights();
-  });
-  
-  // Fechar modal clicando fora
-  modalOverlay.addEventListener('click', function(e) {
-    if (e.target === modalOverlay) {
-      modalOverlay.style.display = 'none';
+  if (closeModal) {
+    closeModal.addEventListener('click', function() {
+      if (modalOverlay) modalOverlay.style.display = 'none';
       isCancelMode = false;
       updateCancelButton();
       updateCancelModeIndicator();
       removeCancellationHighlights();
-    }
-  });
+    });
+  }
+  
+  // Fechar modal clicando fora
+  if (modalOverlay) {
+    modalOverlay.addEventListener('click', function(e) {
+      if (e.target === modalOverlay) {
+        modalOverlay.style.display = 'none';
+        isCancelMode = false;
+        updateCancelButton();
+        updateCancelModeIndicator();
+        removeCancellationHighlights();
+      }
+    });
+  }
   
   // Navegação do calendário
-  prevMonthButton.addEventListener('click', function() {
-    changeMonth(-1);
-  });
+  if (prevMonthButton) {
+    prevMonthButton.addEventListener('click', function() {
+      changeMonth(-1);
+    });
+  }
   
-  nextMonthButton.addEventListener('click', function() {
-    changeMonth(1);
-  });
-  
-  // Carregar itens disponíveis do backend
-  async function loadAvailableItems() {
-    try {
-      const items = await getAvailableItems();
-      // Popular os selects de equipamentos e espaços com os itens do banco
-      // Esta é uma implementação básica - você pode adaptar conforme sua estrutura de dados
-      console.log('Itens disponíveis:', items);
-    } catch (error) {
-      console.error('Erro ao carregar itens:', error);
-    }
+  if (nextMonthButton) {
+    nextMonthButton.addEventListener('click', function() {
+      changeMonth(1);
+    });
   }
   
   // Inicializar o calendário e carregar dados
   generateCalendar();
-  loadAvailableItems();
+  loadItemsIntoSelects('equipment'); // Carregar equipamentos por padrão
+
+  // CORREÇÃO: Carregar reservas na inicialização
+  getReservationsFromBackend().then(reservations => {
+    currentReservations = reservations;
+    generateCalendar();
+  });
+
+  // Debug inicial
+  setTimeout(() => {
+    console.log('=== INICIALIZAÇÃO COMPLETA ===');
+    debugResourceSelection();
+  }, 1000);
 });
