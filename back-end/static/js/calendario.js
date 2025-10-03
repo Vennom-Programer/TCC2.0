@@ -123,14 +123,21 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   
   // =============================================
-  // NOVAS FUNÇÕES PARA CARREGAMENTO DE RECURSOS
+  // FUNÇÕES CORRIGIDAS PARA CARREGAMENTO DO CATÁLOGO
   // =============================================
 
-  // FUNÇÃO CORRIGIDA: Carregar itens nos selects
+  // FUNÇÃO CORRIGIDA: Carregar itens do catálogo nos selects
   async function loadItemsIntoSelects(tipo = 'all') {
       try {
-          console.log('Carregando itens do tipo:', tipo);
-          const response = await fetch(`/api/itens/disponiveis?tipo=${tipo}`);
+          console.log('Carregando itens do catálogo, tipo:', tipo);
+          
+          // Determinar a URL baseada no tipo
+          let url = '/api/itens/disponiveis';
+          if (tipo !== 'all') {
+              url += `?tipo=${tipo}`;
+          }
+          
+          const response = await fetch(url);
           
           if (!response.ok) {
               throw new Error(`Erro HTTP: ${response.status}`);
@@ -144,7 +151,7 @@ document.addEventListener('DOMContentLoaded', function() {
           }
           
           const items = data.itens || [];
-          console.log(`Itens carregados (${tipo}):`, items);
+          console.log(`Itens carregados do catálogo (${tipo}):`, items);
 
           // Limpar selects
           if (equipmentSelect) {
@@ -154,7 +161,7 @@ document.addEventListener('DOMContentLoaded', function() {
               spaceSelect.innerHTML = '<option value="">Selecione um espaço</option>';
           }
           
-          // Popular resourceNames com dados do banco
+          // Popular resourceNames com dados do catálogo
           items.forEach(item => {
               resourceNames[item.id] = item.nome;
               
@@ -162,8 +169,10 @@ document.addEventListener('DOMContentLoaded', function() {
               option.value = item.id;
               option.textContent = `${item.nome} (${item.quantidade} disponíveis)`;
               option.dataset.resourceName = item.nome;
+              option.dataset.quantity = item.quantidade;
+              option.dataset.classification = item.id_classificacao;
               
-              // Classificar baseado em id_classificacao
+              // Classificar baseado em id_classificacao do catálogo
               if (equipmentSelect && (item.id_classificacao === 1 || item.id_classificacao === 2 || item.id_classificacao === 4)) {
                   equipmentSelect.appendChild(option.cloneNode(true));
               }
@@ -175,46 +184,49 @@ document.addEventListener('DOMContentLoaded', function() {
           
           // Se não há itens, mostrar mensagem
           if (items.length === 0) {
-              if (equipmentSelect && tipo === 'equipment') {
-                  equipmentSelect.innerHTML = '<option value="">Nenhum equipamento disponível</option>';
+              if (equipmentSelect && (tipo === 'equipment' || tipo === 'all')) {
+                  equipmentSelect.innerHTML = '<option value="">Nenhum equipamento disponível no catálogo</option>';
               }
-              if (spaceSelect && tipo === 'space') {
-                  spaceSelect.innerHTML = '<option value="">Nenhum espaço disponível</option>';
+              if (spaceSelect && (tipo === 'space' || tipo === 'all')) {
+                  spaceSelect.innerHTML = '<option value="">Nenhum espaço disponível no catálogo</option>';
               }
           }
           
           return items;
           
       } catch (error) {
-          console.error('Erro ao carregar itens:', error);
+          console.error('Erro ao carregar itens do catálogo:', error);
           
           // Fallback para selects vazios com mensagem de erro
           if (equipmentSelect && (tipo === 'equipment' || tipo === 'all')) {
-              equipmentSelect.innerHTML = '<option value="">Erro ao carregar equipamentos</option>';
+              equipmentSelect.innerHTML = '<option value="">Erro ao carregar equipamentos do catálogo</option>';
           }
           if (spaceSelect && (tipo === 'space' || tipo === 'all')) {
-              spaceSelect.innerHTML = '<option value="">Erro ao carregar espaços</option>';
+              spaceSelect.innerHTML = '<option value="">Erro ao carregar espaços do catálogo</option>';
           }
           
           return [];
       }
   }
 
-  // FUNÇÃO DE DEBUG: Verificar estado dos elementos
+  // FUNÇÃO DE DEBUG ATUALIZADA: Verificar estado dos elementos e dados do catálogo
   function debugResourceSelection() {
       console.log('=== DEBUG RESOURCE SELECTION ===');
       console.log('selectedResourceType:', selectedResourceType);
       console.log('selectedResource:', selectedResource);
       console.log('equipmentSelect options:', equipmentSelect ? equipmentSelect.options.length : 'N/A');
       console.log('spaceSelect options:', spaceSelect ? spaceSelect.options.length : 'N/A');
-      console.log('resourceNames:', resourceNames);
-      console.log('availableItems:', availableItems);
+      console.log('resourceNames (do catálogo):', resourceNames);
+      console.log('availableItems (do catálogo):', availableItems);
       
-      // Verificar se os elementos DOM existem
-      console.log('equipmentSelect exists:', !!equipmentSelect);
-      console.log('spaceSelect exists:', !!spaceSelect);
-      console.log('equipmentOptions exists:', !!equipmentOptions);
-      console.log('spaceOptions exists:', !!spaceOptions);
+      // Verificar dados específicos do catálogo
+      if (equipmentSelect && equipmentSelect.options.length > 0) {
+          console.log('Primeiro equipamento:', equipmentSelect.options[1]?.textContent);
+      }
+      if (spaceSelect && spaceSelect.options.length > 0) {
+          console.log('Primeiro espaço:', spaceSelect.options[1]?.textContent);
+      }
+      
       console.log('================================');
   }
 
@@ -230,7 +242,7 @@ document.addEventListener('DOMContentLoaded', function() {
               console.log('Tipos de recursos:', data.tipos);
           }
           
-          // Carregar alguns itens inicialmente (equipamentos)
+          // Carregar alguns itens inicialmente (equipamentos) do catálogo
           await loadItemsIntoSelects('equipment');
           
           // Debug
@@ -971,7 +983,7 @@ document.addEventListener('DOMContentLoaded', function() {
       currentReservations = await getReservationsFromBackend();
     }
     
-    // NOVO: Carregar dados do modal
+    // NOVO: Carregar dados do modal DO CATÁLOGO
     await loadModalData();
     
     // Gerar os horários COM AWAIT
@@ -1188,7 +1200,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const selectedSlots = document.querySelectorAll('.time-slot.selected');
     
     if (selectedSlots.length === 0 || !selectedResource) {
-      reservationDetails.innerHTML = 'Selecione os horários e um recurso para ver os detalhes da reserva.';
+      reservationDetails.innerHTML = 'Selecione os horários e um recurso do catálogo para ver os detalhes da reserva.';
       return;
     }
     
@@ -1196,7 +1208,7 @@ document.addEventListener('DOMContentLoaded', function() {
       return slot.querySelector('.time-range').textContent;
     });
     
-    // CORREÇÃO: Usar resourceNames do banco
+    // CORREÇÃO: Usar resourceNames do catálogo
     const resourceName = resourceNames[selectedResource] || selectedResource;
     
     reservationDetails.innerHTML = `
@@ -1247,10 +1259,10 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   
   // =============================================
-  // EVENT LISTENERS ATUALIZADOS
+  // EVENT LISTENERS ATUALIZADOS PARA CATÁLOGO
   // =============================================
   
-  // CORREÇÃO: Selecionar tipo de recurso - CARREGAR ITENS AO SELECIONAR
+  // CORREÇÃO MELHORADA: Selecionar tipo de recurso - CARREGAR ITENS DO CATÁLOGO
   if (resourceOptions) {
     resourceOptions.forEach(option => {
       option.addEventListener('click', async function() {
@@ -1267,9 +1279,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Mostrar loading
         if (type === 'equipment' && equipmentSelect) {
-          equipmentSelect.innerHTML = '<option value="">Carregando equipamentos...</option>';
+          equipmentSelect.innerHTML = '<option value="">Carregando equipamentos do catálogo...</option>';
         } else if (type === 'space' && spaceSelect) {
-          spaceSelect.innerHTML = '<option value="">Carregando espaços...</option>';
+          spaceSelect.innerHTML = '<option value="">Carregando espaços do catálogo...</option>';
         }
         
         // Mostrar opções apropriadas
@@ -1278,14 +1290,14 @@ document.addEventListener('DOMContentLoaded', function() {
           if (spaceOptions) spaceOptions.classList.remove('visible');
           if (spaceSelect) spaceSelect.value = '';
           
-          // CARREGAR EQUIPAMENTOS
+          // CARREGAR EQUIPAMENTOS DO CATÁLOGO
           await loadItemsIntoSelects('equipment');
         } else {
           if (spaceOptions) spaceOptions.classList.add('visible');
           if (equipmentOptions) equipmentOptions.classList.remove('visible');
           if (equipmentSelect) equipmentSelect.value = '';
           
-          // CARREGAR ESPAÇOS
+          // CARREGAR ESPAÇOS DO CATÁLOGO
           await loadItemsIntoSelects('space');
         }
         
@@ -1439,7 +1451,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
   
-  // FUNÇÃO MELHORADA: Fazer uma reserva
+  // FUNÇÃO MELHORADA: Fazer uma reserva com dados do catálogo
   if (reserveButton) {
     reserveButton.addEventListener('click', async function() {
       if (this.disabled || operationInProgress) return;
@@ -1447,17 +1459,26 @@ document.addEventListener('DOMContentLoaded', function() {
       const selectedSlots = document.querySelectorAll('.time-slot.selected');
       
       if (selectedSlots.length === 0 || !selectedResource) {
-        alert('Selecione pelo menos um horário e um recurso para reservar.');
+        alert('Selecione pelo menos um horário e um recurso do catálogo para reservar.');
         return;
       }
       
       operationInProgress = true;
       
       try {
-        // CORREÇÃO: Usar resourceNames do banco
+        // CORREÇÃO: Usar resourceNames do catálogo
         const resourceName = resourceNames[selectedResource] || selectedResource;
+        const selectedOption = equipmentSelect?.querySelector(`option[value="${selectedResource}"]`) || 
+                             spaceSelect?.querySelector(`option[value="${selectedResource}"]`);
+        const quantity = selectedOption?.dataset.quantity || '1';
         
-        // Criar reservas no backend usando Promise.all para melhor performance
+        console.log('Reservando recurso do catálogo:', {
+          id: selectedResource,
+          nome: resourceName,
+          quantidade: quantity
+        });
+        
+        // Criar reservas no backend
         const reservationPromises = Array.from(selectedSlots).map(slot => {
           const slotKey = slot.dataset.slotKey;
           const timeSlot = getTimeSlotByKey(slotKey);
@@ -1483,11 +1504,17 @@ document.addEventListener('DOMContentLoaded', function() {
           const errorMessages = failed.map(f => f.reason?.message || 'Erro desconhecido').join('\n• ');
           alert(`${successful} reserva(s) criada(s) com sucesso, mas ${failed.length} falharam:\n• ${errorMessages}`);
         } else {
-          alert(`${selectedSlots.length} horário(s) reservado(s) com sucesso!`);
+          alert(`${selectedSlots.length} horário(s) reservado(s) com sucesso para ${resourceName}!`);
         }
         
-        // CORREÇÃO: Recarregar reservas do backend
-        currentReservations = await getReservationsFromBackend();
+        // CORREÇÃO: Recarregar reservas e recursos do catálogo
+        const [updatedReservations, updatedItems] = await Promise.all([
+          getReservationsFromBackend(),
+          loadItemsIntoSelects(selectedResourceType)
+        ]);
+        
+        currentReservations = updatedReservations;
+        availableItems = updatedItems;
         
         // Atualizar a visualização
         await Promise.all([
@@ -1553,19 +1580,27 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
   
-  // Inicializar o calendário e carregar dados
+  // =============================================
+  // INICIALIZAÇÃO CORRIGIDA COM CATÁLOGO
+  // =============================================
+  
+  // Inicializar o calendário e carregar dados DO CATÁLOGO
   generateCalendar();
-  loadItemsIntoSelects('equipment'); // Carregar equipamentos por padrão
+  loadItemsIntoSelects('equipment'); // Carregar equipamentos do catálogo por padrão
 
-  // CORREÇÃO: Carregar reservas na inicialização
-  getReservationsFromBackend().then(reservations => {
+  // CORREÇÃO: Carregar reservas e recursos do catálogo na inicialização
+  Promise.all([
+    getReservationsFromBackend(),
+    getAvailableItems()
+  ]).then(([reservations, items]) => {
     currentReservations = reservations;
+    availableItems = items;
     generateCalendar();
   });
 
   // Debug inicial
   setTimeout(() => {
-    console.log('=== INICIALIZAÇÃO COMPLETA ===');
+    console.log('=== INICIALIZAÇÃO COMPLETA COM CATÁLOGO ===');
     debugResourceSelection();
   }, 1000);
 });
