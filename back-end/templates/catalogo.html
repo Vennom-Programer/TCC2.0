@@ -18,7 +18,7 @@
                 {% if user %}
                 <span>Bem-vindo, <strong>{{ user.nome }}</strong></span>
                 <span class="user-role">({{ user.role }})</span>
-                <a href="{{ url_for('index') }}" class="btn-home">Início</a>
+                <a href="/index.html" class="btn-home">Início</a>
                 <a href="{{ url_for('logout') }}" class="btn-logout">Sair</a>
                 {% endif %}
             </div>
@@ -26,73 +26,84 @@
     </nav>
 
     <!-- Conteúdo principal -->
-    <div class="container">
-        <h1>Catálogo de Itens</h1>
-        
-        <!-- Controles de acesso (apenas para admin) -->
-        {% if user and user.is_admin %}
-        <div class="access-control">
-            <button id="adminMode" class="btn btn-primary">Modo Administrador</button>
-            <button id="userMode" class="btn btn-secondary">Modo Usuário</button>
-        </div>
-        {% endif %}
+    <!-- Conteúdo principal -->
+<div class="container">
+    <h1>Catálogo de Itens</h1>
+    
+    <!-- Mensagens de sucesso/erro -->
+    {% if request.args.get('success') %}
+    <div class="alert alert-success">
+        Item cadastrado com sucesso!
+    </div>
+    {% endif %}
+    
+    <!-- Controles de acesso (apenas para admin) -->
+    {% if user and user.is_admin %}
+    <div class="access-control">
+        <button id="adminMode" class="btn btn-primary">Modo Administrador</button>
+        <button id="userMode" class="btn btn-secondary">Modo Usuário</button>
+    </div>
+    {% endif %}
 
-        <!-- Barra de pesquisa -->
-        <div class="search-bar">
-            <input type="text" id="searchInput" placeholder="Pesquisar itens...">
-        </div>
+    <!-- Barra de pesquisa -->
+    <div class="search-bar">
+        <input type="text" id="searchInput" placeholder="Pesquisar itens...">
+    </div>
 
-        <!-- Tabela de itens -->
-        <table class="resources-table">
-            <thead>
+    <!-- Tabela de itens CORRIGIDA -->
+    <table class="resources-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nome</th>
+                <th>Quantidade</th>
+                <th>Classificação</th>
+                <th>Localização</th>
+                <th>Descrição</th>
+                <th>Especificações Técnicas</th>
+                <th>Categoria</th>
+                {% if user and user.is_admin %}
+                <th class="admin-only">Ações</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody id="resourcesTable">
+            {% if itens %}
+                {% for item in itens %}
                 <tr>
-                    <th>Nome</th>
-                    <th>Quantidade</th>
-                    <th>Classificação</th>
-                    <th>Localização</th>
-                    <th>Descrição</th>
-                    <th>Especificações Técnicas</th>
+                    <td>{{ item.id }}</td>
+                    <td>{{ item.Nome }}</td>
+                    <td>{{ item.quantidade }}</td>
+                    <td>{{ item.classificacao }}</td>
+                    <td>{{ item.localizacao }}</td>
+                    <td>{{ item.descricao or 'N/A' }}</td>
+                    <td>{{ item.especificacoestec or 'N/A' }}</td>
+                    <td>{{ item.categoria or 'N/A' }}</td>
                     {% if user and user.is_admin %}
-                    <th class="admin-only">Ações</th>
+                    <td class="actions admin-only">
+                        <button class="btn btn-edit" data-id="{{ item.id }}">Editar</button>
+                        <button class="btn btn-delete" data-id="{{ item.id }}">Excluir</button>
+                    </td>
                     {% endif %}
                 </tr>
-            </thead>
-            <tbody id="resourcesTable">
-                {% if itens %}
-                    {% for item in itens %}
-                    <tr>
-                        <td>{{ item.Nome }}</td>
-                        <td>{{ item.quantidade }}</td>
-                        <td>{{ item.classificacao }}</td>
-                        <td>{{ item.localizacao }}</td>
-                        <td>{{ item.descricao or 'N/A' }}</td>
-                        <td>{{ item.especificacoestec or 'N/A' }}</td>
-                        <td>{{ item.categoria or 'N/A' }}</td>
-                        {% if user and user.is_admin %}
-                        <td class="actions admin-only">
-                            <button class="btn btn-edit" data-id="{{ item.id }}">Editar</button>
-                            <button class="btn btn-delete" data-id="{{ item.id }}">Excluir</button>
-                        </td>
-                        {% endif %}
-                    </tr>
-                    {% endfor %}
-                {% else %}
-                    <tr>
-                        <td colspan="{% if user and user.is_admin %}8{% else %}7{% endif %}">
-                            Nenhum item encontrado no catálogo.
-                        </td>
-                    </tr>
-                {% endif %}
-            </tbody>
-        </table>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="{% if user and user.is_admin %}9{% else %}8{% endif %}" style="text-align: center; padding: 20px;">
+                        Nenhum item encontrado no catálogo.
+                    </td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
 
-        <!-- Botão para adicionar novo item (apenas admin) -->
-        {% if user and user.is_admin %}
-        <div class="add-resource admin-only">
-            <button id="addResource" class="btn btn-success">Adicionar Novo Item</button>
-        </div>
-        {% endif %}
+    <!-- Botão para adicionar novo item (apenas admin) -->
+    {% if user and user.is_admin %}
+    <div class="add-resource admin-only">
+        <button id="addResource" class="btn btn-success">Adicionar Novo Item</button>
     </div>
+    {% endif %}
+</div>
 
     <!-- Modais (apenas para admin) -->
     {% if user and user.is_admin %}

@@ -276,7 +276,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
         
-        // Salvar item
+        // Salvar item - CORRIGIDO: Agora envia para o servidor
         async handleItemSubmit(e) {
             e.preventDefault();
             
@@ -289,33 +289,51 @@ document.addEventListener('DOMContentLoaded', function () {
             this.showLoading(true);
             
             try {
-                // Simular processamento
-                await this.simulateSave();
+                // Coletar dados do formulário
+                const formData = new FormData();
                 
-                // Salvar item
-                const itemData = {
-                    id: Date.now(),
-                    name: document.getElementById('item-name').value,
-                    categoria: this.categoriaHiddenInput.value,
+                // Adicionar todos os campos necessários para o banco de dados
+                formData.append('item-name', document.getElementById('item-name').value);
+                formData.append('item-type', this.tipoHiddenInput.value);
+                formData.append('item-description', document.getElementById('item-description').value);
+                formData.append('item-quantity', document.getElementById('item-quantity').value);
+                formData.append('item-location', document.getElementById('item-location').value);
+                formData.append('item-specs', document.getElementById('item-specs').value);
+                formData.append('categoria', this.categoriaHiddenInput.value);
+                
+                console.log('Enviando dados para o servidor:', {
+                    nome: document.getElementById('item-name').value,
                     tipo: this.tipoHiddenInput.value,
-                    description: document.getElementById('item-description').value,
-                    quantity: document.getElementById('item-quantity').value,
-                    location: document.getElementById('item-location').value,
-                    specs: document.getElementById('item-specs').value,
-                    createdAt: new Date().toISOString()
-                };
+                    descricao: document.getElementById('item-description').value,
+                    quantidade: document.getElementById('item-quantity').value,
+                    localizacao: document.getElementById('item-location').value,
+                    especificacoes: document.getElementById('item-specs').value,
+                    categoria: this.categoriaHiddenInput.value
+                });
                 
-                this.items.push(itemData);
-                localStorage.setItem('items', JSON.stringify(this.items));
+                // Enviar para o servidor Flask
+                const response = await fetch('/cadastroItem.html', {
+                    method: 'POST',
+                    body: formData
+                });
                 
-                // Mostrar mensagem de sucesso
-                this.showSuccess('Item cadastrado com sucesso!');
-                
-                // Limpar formulário após sucesso
-                this.itemForm.reset();
-                this.initializeCategorySelection();
+                if (response.redirected) {
+                    // Se o servidor redirecionou, seguir o redirecionamento
+                    window.location.href = response.url;
+                } else if (response.ok) {
+                    // Se a resposta foi bem-sucedida sem redirecionamento
+                    this.showSuccess('Item cadastrado com sucesso!');
+                    setTimeout(() => {
+                        window.location.href = '/catalogo.html';
+                    }, 2000);
+                } else {
+                    // Tratar erros do servidor
+                    const errorText = await response.text();
+                    throw new Error('Erro do servidor: ' + response.status);
+                }
                 
             } catch (error) {
+                console.error('Erro ao salvar item:', error);
                 this.showError('Erro ao salvar item. Tente novamente.');
             } finally {
                 this.showLoading(false);
@@ -405,15 +423,6 @@ document.addEventListener('DOMContentLoaded', function () {
             if (confirm('Deseja cancelar o cadastro? Todas as informações serão perdidas.')) {
                 window.location.href = '/index.html';
             }
-        }
-        
-        // Simular salvamento (para demonstração)
-        simulateSave() {
-            return new Promise((resolve) => {
-                setTimeout(() => {
-                    resolve();
-                }, 1500);
-            });
         }
         
         // Mostrar indicador de carregamento

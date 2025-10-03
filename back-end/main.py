@@ -406,10 +406,10 @@ def cadastroItensPost():
     try:
         cursor = get_cursor()
         query = """
-        INSERT INTO itens (Nome, id_classificacao, descricao, quantidade, id_localizacao, especificacoestec, categoria) 
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO itens (Nome, id_classificacao, descricao, quantidade, id_localizacao, especificacoestec)
+        VALUES (%s, %s, %s, %s, %s, %s)
         """
-        values = (nome, id_classificacao, descricao, quantidade, id_localizacao, especificacoestec, categoria)
+        values = (nome, id_classificacao, descricao, quantidade, id_localizacao, especificacoestec)
         cursor.execute(query, values)
         get_db_connection().commit()
         return redirect('/catalogo.html?success=1')
@@ -433,14 +433,14 @@ def catalogo():
     try:
         cursor = get_cursor()
         cursor.execute("""
-            SELECT i.id, i.Nome, i.descricao, i.quantidade, 
-                   c.nome as classificacao, l.nome as localizacao, 
-                   i.especificacoestec, i.categoria 
-            FROM itens i 
-            JOIN classificacao c ON i.id_classificacao = c.id 
-            JOIN localizacao l ON i.id_localizacao = l.id 
-            ORDER BY i.Nome
-        """)
+    SELECT i.id, i.Nome, i.descricao, i.quantidade, 
+           c.nome as classificacao, l.nome as localizacao, 
+           i.especificacoestec, i.categoria 
+    FROM itens i 
+    JOIN classificacao c ON i.id_classificacao = c.id 
+    JOIN localizacao l ON i.id_localizacao = l.id 
+    ORDER BY i.Nome
+""")
         itens = cursor.fetchall()
         
         # Buscar informações do usuário logado
