@@ -3,84 +3,103 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Catálogo de Recursos - {% if user and user.is_admin %}Modo Administrador{% else %}Modo Usuário{% endif %}</title>
+    <title>Catálogo de Itens</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="{{url_for('static', filename='css/catalogo.css')}}">
 </head>
-<body {% if user and user.is_admin %}class="admin-mode"{% endif %}>
-    <a href="/index.html" class="back-button">
-        <i class="fas fa-arrow-left"></i> Voltar ao Menu
-    </a>
-
-    <div class="container">
-        <h1>
-            <i class="fas fa-book-open"></i> Catálogo de Recursos
-            {% if user and user.is_admin %}
-            <span class="admin-badge">(Modo Administrador)</span>
-            {% else %}
-            <span class="user-badge">(Modo Usuário)</span>
-            {% endif %}
-        </h1>
-
-        <!-- Informações do usuário -->
-        <div class="user-info">
-            <strong>Usuário:</strong> {{ user.nome if user else 'N/A' }} | 
-            <strong>Email:</strong> {{ user.email if user else 'N/A' }} | 
-            <strong>Tipo:</strong> {{ user.role if user else 'N/A' }}
-        </div>
-
-        
-
-        <div class="search-bar">
-            <div class="search-box">
-                <i class="fas fa-search"></i>
-                <input type="text" id="searchInput" placeholder="Pesquisar recursos...">
+<body>
+    <!-- Barra de navegação -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <h2>Sistema de Reservas</h2>
             </div>
-            {% if user and user.is_admin %}
-            {% endif %}
+            <div class="nav-user">
+                {% if user %}
+                <span>Bem-vindo, <strong>{{ user.nome }}</strong></span>
+                <span class="user-role">({{ user.role }})</span>
+                <a href="{{ url_for('index') }}" class="btn-home">Início</a>
+                <a href="{{ url_for('logout') }}" class="btn-logout">Sair</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <!-- Conteúdo principal -->
+    <div class="container">
+        <h1>Catálogo de Itens</h1>
+        
+        <!-- Controles de acesso (apenas para admin) -->
+        {% if user and user.is_admin %}
+        <div class="access-control">
+            <button id="adminMode" class="btn btn-primary">Modo Administrador</button>
+            <button id="userMode" class="btn btn-secondary">Modo Usuário</button>
+        </div>
+        {% endif %}
+
+        <!-- Barra de pesquisa -->
+        <div class="search-bar">
+            <input type="text" id="searchInput" placeholder="Pesquisar itens...">
         </div>
 
-        <table class="catalog-table">
+        <!-- Tabela de itens -->
+        <table class="resources-table">
             <thead>
                 <tr>
                     <th>Nome</th>
                     <th>Quantidade</th>
-                    <th>ID</th>
+                    <th>Classificação</th>
+                    <th>Localização</th>
                     <th>Descrição</th>
+                    <th>Especificações Técnicas</th>
                     {% if user and user.is_admin %}
+                    <th class="admin-only">Ações</th>
                     {% endif %}
                 </tr>
             </thead>
             <tbody id="resourcesTable">
-                {% if itens and itens|length > 0 %}
+                {% if itens %}
                     {% for item in itens %}
                     <tr>
                         <td>{{ item.Nome }}</td>
                         <td>{{ item.quantidade }}</td>
-                        <td>{{ item.id }}</td>
-                        <td>{{ item.descricao or 'Sem descrição' }}</td>
+                        <td>{{ item.classificacao }}</td>
+                        <td>{{ item.localizacao }}</td>
+                        <td>{{ item.descricao or 'N/A' }}</td>
+                        <td>{{ item.especificacoestec or 'N/A' }}</td>
+                        <td>{{ item.categoria or 'N/A' }}</td>
                         {% if user and user.is_admin %}
+                        <td class="actions admin-only">
+                            <button class="btn btn-edit" data-id="{{ item.id }}">Editar</button>
+                            <button class="btn btn-delete" data-id="{{ item.id }}">Excluir</button>
+                        </td>
                         {% endif %}
                     </tr>
                     {% endfor %}
                 {% else %}
                     <tr>
-                        <td colspan="{% if user and user.is_admin %}5{% else %}4{% endif %}">Nenhum item encontrado.</td>
+                        <td colspan="{% if user and user.is_admin %}8{% else %}7{% endif %}">
+                            Nenhum item encontrado no catálogo.
+                        </td>
                     </tr>
                 {% endif %}
             </tbody>
         </table>
+
+        <!-- Botão para adicionar novo item (apenas admin) -->
+        {% if user and user.is_admin %}
+        <div class="add-resource admin-only">
+            <button id="addResource" class="btn btn-success">Adicionar Novo Item</button>
+        </div>
+        {% endif %}
     </div>
 
-    <!-- Modais - apenas para admins -->
+    <!-- Modais (apenas para admin) -->
     {% if user and user.is_admin %}
     <!-- Modal de Edição -->
     <div id="editModal" class="modal">
         <div class="modal-content">
-            <div class="modal-header">
-                <h2>Editar Recurso</h2>
-                <button class="close-btn">&times;</button>
-            </div>
+            <h2>Editar Item</h2>
             <form id="editForm">
                 <input type="hidden" id="edit-id">
                 <div class="form-group">
@@ -89,15 +108,15 @@
                 </div>
                 <div class="form-group">
                     <label for="edit-quantity">Quantidade:</label>
-                    <input type="number" id="edit-quantity" required min="0">
+                    <input type="number" id="edit-quantity" min="1" required>
                 </div>
                 <div class="form-group">
                     <label for="edit-description">Descrição:</label>
-                    <textarea id="edit-description" rows="3"></textarea>
+                    <textarea id="edit-description"></textarea>
                 </div>
-                <div class="modal-actions">
-                    <button type="button" class="modal-btn cancel-btn" id="cancelEdit">Cancelar</button>
-                    <button type="button" class="modal-btn save-btn" id="saveEdit">Salvar</button>
+                <div class="form-actions">
+                    <button type="button" id="saveEdit" class="btn btn-primary">Salvar</button>
+                    <button type="button" id="cancelEdit" class="btn btn-secondary">Cancelar</button>
                 </div>
             </form>
         </div>
@@ -106,10 +125,7 @@
     <!-- Modal de Adição -->
     <div id="addModal" class="modal">
         <div class="modal-content">
-            <div class="modal-header">
-                <h2>Adicionar Recurso</h2>
-                <button class="close-btn">&times;</button>
-            </div>
+            <h2>Adicionar Novo Item</h2>
             <form id="addForm">
                 <div class="form-group">
                     <label for="add-name">Nome:</label>
@@ -117,21 +133,33 @@
                 </div>
                 <div class="form-group">
                     <label for="add-quantity">Quantidade:</label>
-                    <input type="number" id="add-quantity" required min="0" value="1">
+                    <input type="number" id="add-quantity" min="1" required>
                 </div>
                 <div class="form-group">
                     <label for="add-description">Descrição:</label>
-                    <textarea id="add-description" rows="3"></textarea>
+                    <textarea id="add-description"></textarea>
                 </div>
-                <div class="modal-actions">
-                    <button type="button" class="modal-btn cancel-btn" id="cancelAdd">Cancelar</button>
-                    <button type="button" class="modal-btn save-btn" id="saveAdd">Salvar</button>
+                <div class="form-actions">
+                    <button type="button" id="saveAdd" class="btn btn-primary">Adicionar</button>
+                    <button type="button" id="cancelAdd" class="btn btn-secondary">Cancelar</button>
                 </div>
             </form>
         </div>
     </div>
     {% endif %}
 
-    <script src="{{url_for('static', filename='js/catalogo.js')}}"></script>
+    <!-- Script JavaScript -->
+    <script>
+        // Passar informações do usuário do Flask para o JavaScript
+        const userInfo = {
+            isAdmin: "{{ 'true' if user and user.is_admin else 'false' }}",
+            email: "{{ user.email if user else '' }}",
+            nome: "{{ user.nome if user else '' }}",
+            role: "{{ user.role if user else '' }}"
+        };
+        
+        console.log('Informações do usuário:', userInfo);
+    </script>
+    <script src="{{ url_for('static', filename='catalogo.js') }}"></script>
 </body>
 </html>

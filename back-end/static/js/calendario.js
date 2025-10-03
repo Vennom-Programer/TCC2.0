@@ -110,7 +110,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Seed with backend users
   allUsers.forEach(u => {
-    const uid = String(u.numeroDaMatricula); // CORREÇÃO: usar numeroDaMatricula
+    const uid = String(u.Id); // CORREÇÃO: usar Id
     userNames[uid] = u.nome;
     ensureColor(uid);
   });
@@ -126,12 +126,11 @@ document.addEventListener('DOMContentLoaded', function() {
   // FUNÇÕES CORRIGIDAS PARA CARREGAMENTO DO CATÁLOGO
   // =============================================
 
-  // FUNÇÃO CORRIGIDA: Carregar itens do catálogo nos selects
+  // FUNÇÃO CORRIGIDA: Carregar itens do catálogo classificando por tipo
   async function loadItemsIntoSelects(tipo = 'all') {
       try {
           console.log('Carregando itens do catálogo, tipo:', tipo);
           
-          // Determinar a URL baseada no tipo
           let url = '/api/itens/disponiveis';
           if (tipo !== 'all') {
               url += `?tipo=${tipo}`;
@@ -161,7 +160,10 @@ document.addEventListener('DOMContentLoaded', function() {
               spaceSelect.innerHTML = '<option value="">Selecione um espaço</option>';
           }
           
-          // Popular resourceNames com dados do catálogo
+          // Popular resourceNames e organizar por tipo
+          let equipamentosCount = 0;
+          let espacosCount = 0;
+          
           items.forEach(item => {
               resourceNames[item.id] = item.nome;
               
@@ -172,40 +174,63 @@ document.addEventListener('DOMContentLoaded', function() {
               option.dataset.quantity = item.quantidade;
               option.dataset.classification = item.id_classificacao;
               
-              // Classificar baseado em id_classificacao do catálogo
-              if (equipmentSelect && (item.id_classificacao === 1 || item.id_classificacao === 2 || item.id_classificacao === 4)) {
-                  equipmentSelect.appendChild(option.cloneNode(true));
+              // Classificar baseado em id_classificacao
+              // Equipamentos: classificações 1, 2, 4 (Eletrônico, Didático, Ferramenta)
+              if (item.id_classificacao === 1 || item.id_classificacao === 2 || item.id_classificacao === 4) {
+                  if (equipmentSelect) {
+                      equipmentSelect.appendChild(option.cloneNode(true));
+                      equipamentosCount++;
+                  }
               }
-              
-              if (spaceSelect && item.id_classificacao === 3) {
-                  spaceSelect.appendChild(option.cloneNode(true));
+              // Espaços: classificação 3 (Mobiliário)
+              else if (item.id_classificacao === 3) {
+                  if (spaceSelect) {
+                      spaceSelect.appendChild(option.cloneNode(true));
+                      espacosCount++;
+                  }
+              }
+              // Outros (classificação 5) - podem ser ambos
+              else if (item.id_classificacao === 5) {
+                  if (equipmentSelect) {
+                      equipmentSelect.appendChild(option.cloneNode(true));
+                      equipamentosCount++;
+                  }
+                  if (spaceSelect) {
+                      spaceSelect.appendChild(option.cloneNode(true));
+                      espacosCount++;
+                  }
               }
           });
           
-          // Se não há itens, mostrar mensagem
-          if (items.length === 0) {
-              if (equipmentSelect && (tipo === 'equipment' || tipo === 'all')) {
-                  equipmentSelect.innerHTML = '<option value="">Nenhum equipamento disponível no catálogo</option>';
-              }
-              if (spaceSelect && (tipo === 'space' || tipo === 'all')) {
-                  spaceSelect.innerHTML = '<option value="">Nenhum espaço disponível no catálogo</option>';
-              }
-          }
+          // Atualizar contadores na interface
+          updateResourceCounters(equipamentosCount, espacosCount);
           
           return items;
           
       } catch (error) {
           console.error('Erro ao carregar itens do catálogo:', error);
           
-          // Fallback para selects vazios com mensagem de erro
           if (equipmentSelect && (tipo === 'equipment' || tipo === 'all')) {
-              equipmentSelect.innerHTML = '<option value="">Erro ao carregar equipamentos do catálogo</option>';
+              equipmentSelect.innerHTML = '<option value="">Erro ao carregar equipamentos</option>';
           }
           if (spaceSelect && (tipo === 'space' || tipo === 'all')) {
-              spaceSelect.innerHTML = '<option value="">Erro ao carregar espaços do catálogo</option>';
+              spaceSelect.innerHTML = '<option value="">Erro ao carregar espaços</option>';
           }
           
           return [];
+      }
+  }
+
+  // NOVA FUNÇÃO: Atualizar contadores de recursos
+  function updateResourceCounters(equipamentosCount, espacosCount) {
+      const equipmentCounter = document.getElementById('equipment-counter');
+      const spaceCounter = document.getElementById('space-counter');
+      
+      if (equipmentCounter) {
+          equipmentCounter.textContent = `(${equipamentosCount} disponíveis)`;
+      }
+      if (spaceCounter) {
+          spaceCounter.textContent = `(${espacosCount} disponíveis)`;
       }
   }
 
@@ -257,100 +282,218 @@ document.addEventListener('DOMContentLoaded', function() {
   // FUNÇÕES DE INTEGRAÇÃO COM BACKEND - CORRIGIDAS
   // =============================================
   
-  // Função para buscar reservas do backend
-  async function getReservationsFromBackend() {
-    try {
-      const response = await fetch('/api/reservas');
-      if (response.ok) {
-        const data = await response.json();
-        return data.reservas || {};
-      } else {
-        console.error('Erro na resposta do servidor:', response.status);
-      }
-    } catch (error) {
-      console.error('Erro ao buscar reservas:', error);
+  // FUNÇÃO CORRIGIDA: Buscar reservas do backend
+async function getReservationsFromBackend() {
+  try {
+    const response = await fetch('/api/reservas');
+    if (response.ok) {
+      const data = await response.json();
+      return data.reservas || {}; // Agora compatível com o backend
+    } else {
+      console.error('Erro na resposta do servidor:', response.status);
     }
-    return {};
+  } catch (error) {
+    console.error('Erro ao buscar reservas:', error);
   }
-  
-  // FUNÇÃO CORRIGIDA: Salvar reserva no backend
-  async function saveReservationToBackend(reservationData) {
+  return {};
+}
+
+// FUNÇÃO CORRIGIDA: Carregar itens do catálogo classificando por tipo
+async function loadItemsIntoSelects(tipo = 'all') {
     try {
-      const response = await fetch('/api/reservas', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(reservationData)
-      });
-      
-      if (response.ok) {
-        return await response.json();
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Erro ao salvar reserva');
-      }
-    } catch (error) {
-      console.error('Erro:', error);
-      throw error;
-    }
-  }
-  
-  // FUNÇÃO CORRIGIDA: Cancelar reserva no backend
-  async function cancelReservationInBackend(reservationId) {
-    try {
-      const response = await fetch(`/api/reservas/${reservationId}`, {
-        method: 'DELETE'
-      });
-      
-      if (response.ok) {
-        return await response.json();
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Erro ao cancelar reserva');
-      }
-    } catch (error) {
-      console.error('Erro:', error);
-      throw error;
-    }
-  }
-  
-  // FUNÇÃO CORRIGIDA: Buscar itens disponíveis do backend
-  async function getAvailableItems() {
-    try {
-      const response = await fetch('/api/itens');
-      if (response.ok) {
-        const data = await response.json();
+        console.log('Carregando itens do catálogo, tipo:', tipo);
         
-        // CORREÇÃO: Popular resourceNames com dados do banco
-        if (data.itens && Array.isArray(data.itens)) {
-          availableItems = data.itens;
-          data.itens.forEach(item => {
-            resourceNames[item.id] = item.nome; // CORREÇÃO: usar id como chave
-          });
+        let url = '/api/itens/disponiveis';
+        if (tipo !== 'all') {
+            url += `?tipo=${tipo}`;
         }
         
-        return data.itens || [];
-      }
-    } catch (error) {
-      console.error('Erro ao buscar itens:', error);
-    }
-    return [];
-  }
-
-  // NOVA FUNÇÃO: Buscar usuários (para admin)
-  async function getAvailableUsers() {
-    try {
-      const response = await fetch('/api/admin/usuarios');
-      if (response.ok) {
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            throw new Error(`Erro HTTP: ${response.status}`);
+        }
+        
         const data = await response.json();
-        return data.usuarios || [];
-      }
+        
+        if (data.error) {
+            console.error('Erro do servidor:', data.error);
+            throw new Error(data.error);
+        }
+        
+        const items = data.itens || [];
+        console.log(`Itens carregados do catálogo (${tipo}):`, items);
+
+        // Limpar selects
+        if (equipmentSelect) {
+            equipmentSelect.innerHTML = '<option value="">Selecione um equipamento</option>';
+        }
+        if (spaceSelect) {
+            spaceSelect.innerHTML = '<option value="">Selecione um espaço</option>';
+        }
+        
+        // Popular resourceNames e organizar por tipo
+        let equipamentosCount = 0;
+        let espacosCount = 0;
+        
+        items.forEach(item => {
+            resourceNames[item.id] = item.Nome; // CORREÇÃO: usar item.Nome (com N maiúsculo)
+            
+            const option = document.createElement('option');
+            option.value = item.id;
+            option.textContent = `${item.Nome} (${item.quantidade} disponíveis)`;
+            option.dataset.resourceName = item.Nome;
+            option.dataset.quantity = item.quantidade;
+            option.dataset.classification = item.id_classificacao;
+            
+            // Classificar baseado em id_classificacao
+            // Equipamentos: classificações 1, 2, 4 (Eletrônico, Didático, Ferramenta)
+            if (item.id_classificacao === 1 || item.id_classificacao === 2 || item.id_classificacao === 4) {
+                if (equipmentSelect) {
+                    equipmentSelect.appendChild(option.cloneNode(true));
+                    equipamentosCount++;
+                }
+            }
+            // Espaços: classificação 3 (Mobiliário)
+            else if (item.id_classificacao === 3) {
+                if (spaceSelect) {
+                    spaceSelect.appendChild(option.cloneNode(true));
+                    espacosCount++;
+                }
+            }
+            // Outros (classificação 5) - podem ser ambos
+            else if (item.id_classificacao === 5) {
+                if (equipmentSelect) {
+                    equipmentSelect.appendChild(option.cloneNode(true));
+                    equipamentosCount++;
+                }
+                if (spaceSelect) {
+                    spaceSelect.appendChild(option.cloneNode(true));
+                    espacosCount++;
+                }
+            }
+        });
+        
+        // Atualizar contadores na interface
+        updateResourceCounters(equipamentosCount, espacosCount);
+        
+        return items;
+        
     } catch (error) {
-      console.error('Erro ao buscar usuários:', error);
+        console.error('Erro ao carregar itens do catálogo:', error);
+        
+        if (equipmentSelect && (tipo === 'equipment' || tipo === 'all')) {
+            equipmentSelect.innerHTML = '<option value="">Erro ao carregar equipamentos</option>';
+        }
+        if (spaceSelect && (tipo === 'space' || tipo === 'all')) {
+            spaceSelect.innerHTML = '<option value="">Erro ao carregar espaços</option>';
+        }
+        
+        return [];
+    }
+}
+
+// NOVA FUNÇÃO: Carregar dados quando o modal abre
+async function loadModalData() {
+    try {
+        console.log('Carregando dados do modal...');
+        
+        // Carregar tipos de recursos
+        const response = await fetch('/api/recursos/tipos');
+        if (response.ok) {
+            const data = await response.json();
+            console.log('Tipos de recursos:', data.tipos);
+        }
+        
+        // Carregar alguns itens inicialmente (equipamentos) do catálogo
+        await loadItemsIntoSelects('equipment');
+        
+        // Debug
+        debugResourceSelection();
+        
+    } catch (error) {
+        console.error('Erro ao carregar dados do modal:', error);
+    }
+}
+
+// FUNÇÃO CORRIGIDA: Salvar reserva no backend
+async function saveReservationToBackend(reservationData) {
+    try {
+        const response = await fetch('/api/reservas', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(reservationData)
+        });
+        
+        if (response.ok) {
+            return await response.json();
+        } else {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Erro ao salvar reserva');
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        throw error;
+    }
+}
+
+// FUNÇÃO CORRIGIDA: Cancelar reserva no backend
+async function cancelReservationInBackend(reservationId) {
+    try {
+        const response = await fetch(`/api/reservas/${reservationId}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            return await response.json();
+        } else {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Erro ao cancelar reserva');
+        }
+    } catch (error) {
+        console.error('Erro:', error);
+        throw error;
+    }
+}
+
+// FUNÇÃO CORRIGIDA: Buscar itens disponíveis do backend
+async function getAvailableItems() {
+    try {
+        const response = await fetch('/api/itens');
+        if (response.ok) {
+            const data = await response.json();
+            
+            // CORREÇÃO: Popular resourceNames com dados do banco
+            if (data.itens && Array.isArray(data.itens)) {
+                availableItems = data.itens;
+                data.itens.forEach(item => {
+                    resourceNames[item.id] = item.Nome; // CORREÇÃO: usar item.Nome
+                });
+            }
+            
+            return data.itens || [];
+        }
+    } catch (error) {
+        console.error('Erro ao buscar itens:', error);
     }
     return [];
-  }
+}
+
+// NOVA FUNÇÃO: Buscar usuários (para admin)
+async function getAvailableUsers() {
+    try {
+        const response = await fetch('/api/admin/usuarios');
+        if (response.ok) {
+            const data = await response.json();
+            return data.usuarios || [];
+        }
+    } catch (error) {
+        console.error('Erro ao buscar usuários:', error);
+    }
+    return [];
+}
   
   // =============================================
   // NOVAS FUNÇÕES MELHORADAS PARA CANCELAMENTO
@@ -364,7 +507,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // CORREÇÃO: Usuário comum só pode cancelar suas próprias reservas
-    // Usar numeroDaMatricula para comparação
+    // Usar Id para comparação
     return String(reservation.userId) === String(currentUserData.id);
   }
 
@@ -635,7 +778,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     const dayReservations = currentReservations[selectedDateKey] || {};
     
-    // CORREÇÃO: Filtrar apenas minhas reservas usando numeroDaMatricula
+    // CORREÇÃO: Filtrar apenas minhas reservas usando Id
     const myReservations = Object.values(dayReservations).filter(reservation => 
       reservation.reserved && String(reservation.userId) === String(currentUserData.id)
     );

@@ -100,10 +100,12 @@ function inicializarCatalogo() {
                 const row = rows[i];
                 const cells = row.querySelectorAll('td');
                 const name = cells[0].textContent.toLowerCase();
-                const id = cells[2].textContent.toLowerCase();
-                const description = cells[3].textContent.toLowerCase();
+                const classification = cells[2] ? cells[2].textContent.toLowerCase() : '';
+                const location = cells[3] ? cells[3].textContent.toLowerCase() : '';
+                const description = cells[4] ? cells[4].textContent.toLowerCase() : '';
                 
-                if (name.includes(searchText) || id.includes(searchText) || description.includes(searchText)) {
+                if (name.includes(searchText) || classification.includes(searchText) || 
+                    location.includes(searchText) || description.includes(searchText)) {
                     row.style.display = '';
                 } else {
                     row.style.display = 'none';
@@ -123,6 +125,11 @@ function inicializarCatalogo() {
         actionHeaders.forEach(header => {
             header.style.display = 'none';
         });
+        
+        const actionCells = document.querySelectorAll('td.admin-only');
+        actionCells.forEach(cell => {
+            cell.style.display = 'none';
+        });
     }
 }
 
@@ -137,8 +144,8 @@ function configurarEventosAdmin() {
             // Preencher o modal com os dados atuais
             editName.value = cells[0].textContent;
             editQuantity.value = cells[1].textContent;
-            editId.value = cells[2].textContent;
-            editDescription.value = cells[3].textContent;
+            editId.value = this.getAttribute('data-id');
+            editDescription.value = cells[4].textContent;
             
             // Armazenar a linha sendo editada
             currentEditRow = row;
@@ -149,15 +156,17 @@ function configurarEventosAdmin() {
     });
     
     // Abrir modal de adição
-    addResourceBtn.addEventListener('click', () => {
-        // Limpar o formulário
-        addName.value = '';
-        addQuantity.value = '1';
-        addDescription.value = '';
-        
-        // Exibir o modal
-        addModal.style.display = 'flex';
-    });
+    if (addResourceBtn) {
+        addResourceBtn.addEventListener('click', () => {
+            // Limpar o formulário
+            addName.value = '';
+            addQuantity.value = '1';
+            addDescription.value = '';
+            
+            // Exibir o modal
+            addModal.style.display = 'flex';
+        });
+    }
     
     // Fechar modais
     const closeModal = () => {
@@ -174,53 +183,59 @@ function configurarEventosAdmin() {
     if (cancelAddBtn) cancelAddBtn.addEventListener('click', closeModal);
     
     // Salvar edição
-    saveEditBtn.addEventListener('click', () => {
-        if (currentEditRow) {
-            const cells = currentEditRow.querySelectorAll('td');
-            cells[0].textContent = editName.value;
-            cells[1].textContent = editQuantity.value;
-            cells[2].textContent = editId.value;
-            cells[3].textContent = editDescription.value;
-            
-            alert("Recurso atualizado com sucesso!");
-            closeModal();
-        }
-    });
+    if (saveEditBtn) {
+        saveEditBtn.addEventListener('click', () => {
+            if (currentEditRow) {
+                const cells = currentEditRow.querySelectorAll('td');
+                cells[0].textContent = editName.value;
+                cells[1].textContent = editQuantity.value;
+                cells[4].textContent = editDescription.value;
+                
+                alert("Recurso atualizado com sucesso!");
+                closeModal();
+            }
+        });
+    }
     
     // Salvar novo recurso
-    saveAddBtn.addEventListener('click', () => {
-        if (addName.value && addQuantity.value) {
-            // Criar nova linha na tabela
-            const newRow = document.createElement('tr');
-            const newId = 'temp-' + Date.now(); // ID temporário
-            
-            newRow.innerHTML = `
-                <td>${addName.value}</td>
-                <td>${addQuantity.value}</td>
-                <td>${newId}</td>
-                <td>${addDescription.value || 'Sem descrição'}</td>
-                <td class="actions admin-only">
-                    <button class="btn btn-edit" data-id="${newId}">Editar</button>
-                    <button class="btn btn-delete" data-id="${newId}">Excluir</button>
-                </td>
-            `;
-            
-            // Adicionar a nova linha à tabela (antes da última linha se existir mensagem de vazio)
-            const emptyRow = resourcesTable.querySelector('tr td[colspan]');
-            if (emptyRow) {
-                emptyRow.closest('tr').remove();
+    if (saveAddBtn) {
+        saveAddBtn.addEventListener('click', () => {
+            if (addName.value && addQuantity.value) {
+                // Criar nova linha na tabela
+                const newRow = document.createElement('tr');
+                const newId = 'temp-' + Date.now(); // ID temporário
+                
+                newRow.innerHTML = `
+                    <td>${addName.value}</td>
+                    <td>${addQuantity.value}</td>
+                    <td>Nova Classificação</td>
+                    <td>Nova Localização</td>
+                    <td>${addDescription.value || 'Sem descrição'}</td>
+                    <td>N/A</td>
+                    <td>N/A</td>
+                    <td class="actions admin-only">
+                        <button class="btn btn-edit" data-id="${newId}">Editar</button>
+                        <button class="btn btn-delete" data-id="${newId}">Excluir</button>
+                    </td>
+                `;
+                
+                // Adicionar a nova linha à tabela (antes da última linha se existir mensagem de vazio)
+                const emptyRow = resourcesTable.querySelector('tr td[colspan]');
+                if (emptyRow) {
+                    emptyRow.closest('tr').remove();
+                }
+                resourcesTable.appendChild(newRow);
+                
+                // Adicionar eventos aos novos botões
+                adicionarEventosBotoes();
+                
+                alert("Recurso adicionado com sucesso!");
+                closeModal();
+            } else {
+                alert("Por favor, preencha pelo menos o nome e quantidade.");
             }
-            resourcesTable.appendChild(newRow);
-            
-            // Adicionar eventos aos novos botões
-            adicionarEventosBotoes();
-            
-            alert("Recurso adicionado com sucesso!");
-            closeModal();
-        } else {
-            alert("Por favor, preencha pelo menos o nome e quantidade.");
-        }
-    });
+        });
+    }
     
     // Adicionar eventos para os botões de excluir existentes
     adicionarEventosBotoes();
@@ -254,8 +269,8 @@ function adicionarEventosBotoes() {
             
             editName.value = cells[0].textContent;
             editQuantity.value = cells[1].textContent;
-            editId.value = cells[2].textContent;
-            editDescription.value = cells[3].textContent;
+            editId.value = this.getAttribute('data-id');
+            editDescription.value = cells[4].textContent;
             
             currentEditRow = row;
             editModal.style.display = 'flex';
@@ -272,7 +287,8 @@ function adicionarEventosBotoes() {
                 // Se não houver mais linhas, adicionar mensagem de vazio
                 if (resourcesTable.querySelectorAll('tr').length <= 1) {
                     const emptyRow = document.createElement('tr');
-                    emptyRow.innerHTML = '<td colspan="5">Nenhum item encontrado.</td>';
+                    const colCount = document.querySelector('thead tr').cells.length;
+                    emptyRow.innerHTML = `<td colspan="${colCount}">Nenhum item encontrado.</td>`;
                     resourcesTable.appendChild(emptyRow);
                 }
                 
@@ -281,138 +297,6 @@ function adicionarEventosBotoes() {
         });
     });
 }
-
-// Passar informações do usuário para o JavaScript
-        const userInfo = {
-            isAdmin: `{% if user and user.is_admin %}true{% else %}false{% endif %}`,
-            email: "{{ user.email if user else '' }}",
-            nome: "{{ user.nome if user else '' }}",
-            role: "{{ user.role if user else '' }}"
-        };
-        
-        console.log('Informações do usuário:', userInfo);
-        
-        // Inicializar modo admin baseado no banco de dados
-        document.addEventListener('DOMContentLoaded', function() {
-            if (userInfo.isAdmin) {
-                console.log('Usuário é administrador - ativando modo admin');
-                document.body.classList.add('admin-mode');
-                localStorage.setItem('catalogMode', 'admin');
-            } else {
-                console.log('Usuário não é administrador - modo usuário');
-                document.body.classList.remove('admin-mode');
-                localStorage.setItem('catalogMode', 'user');
-                
-                // Esconder elementos admin-only
-                const adminElements = document.querySelectorAll('.admin-only');
-                adminElements.forEach(el => {
-                    el.style.display = 'none';
-                });
-            }
-        });
-        document.addEventListener('DOMContentLoaded', function () {
-    const saveBtn = document.querySelector('.form-actions .btn-primary');
-    const cancelBtn = document.querySelector('.form-actions .btn-secondary');
-    const form = document.querySelector('form[action="/cadastroItem.html"]');
-
-    // Elementos das categorias
-    const categoriaBtns = document.querySelectorAll('.categoria-btn');
-    const subcategoriasEquipamento = document.getElementById('subcategorias-equipamento');
-    const subcategoriasEspaco = document.getElementById('subcategorias-espaco');
-    const selectEquipamento = document.getElementById('item-type-equipamento');
-    const selectEspaco = document.getElementById('item-type-espaco');
-    const hiddenCategoria = document.getElementById('categoria-selecionada');
-
-    // Variável para controlar a categoria selecionada
-    let categoriaSelecionada = '';
-
-    // Event listeners para os botões de categoria
-    categoriaBtns.forEach(btn => {
-        btn.addEventListener('click', function() {
-            // Remove a classe active de todos os botões
-            categoriaBtns.forEach(b => b.classList.remove('active'));
-            
-            // Adiciona a classe active ao botão clicado
-            this.classList.add('active');
-            
-            // Obtém a categoria selecionada
-            categoriaSelecionada = this.getAttribute('data-categoria');
-            hiddenCategoria.value = categoriaSelecionada;
-            
-            // Esconde todas as subcategorias
-            subcategoriasEquipamento.classList.add('hidden');
-            subcategoriasEspaco.classList.add('hidden');
-            
-            // Desabilita todos os selects primeiro
-            selectEquipamento.disabled = true;
-            selectEspaco.disabled = true;
-            selectEquipamento.removeAttribute('required');
-            selectEspaco.removeAttribute('required');
-            
-            // Mostra a subcategoria correspondente e habilita o select
-            if (categoriaSelecionada === 'equipamento') {
-                subcategoriasEquipamento.classList.remove('hidden');
-                selectEquipamento.disabled = false;
-                selectEquipamento.setAttribute('required', 'required');
-            } else if (categoriaSelecionada === 'espaco') {
-                subcategoriasEspaco.classList.remove('hidden');
-                selectEspaco.disabled = false;
-                selectEspaco.setAttribute('required', 'required');
-            }
-        });
-    });
-
-    // Validação do formulário
-    if (form) {
-        form.addEventListener('submit', function(e) {
-            if (!categoriaSelecionada) {
-                e.preventDefault();
-                alert('Por favor, selecione o tipo de item (Equipamento ou Espaço)');
-                return false;
-            }
-            
-            // Valida se uma subcategoria foi selecionada
-            if (categoriaSelecionada === 'equipamento' && !selectEquipamento.value) {
-                e.preventDefault();
-                alert('Por favor, selecione o tipo de equipamento');
-                return false;
-            }
-            
-            if (categoriaSelecionada === 'espaco' && !selectEspaco.value) {
-                e.preventDefault();
-                alert('Por favor, selecione o tipo de espaço');
-                return false;
-            }
-            
-            // Garante que apenas o select correto seja enviado
-            if (categoriaSelecionada === 'equipamento') {
-                selectEspaco.disabled = true;
-                // Move o valor para o select principal se necessário
-                const hiddenInput = document.createElement('input');
-                hiddenInput.type = 'hidden';
-                hiddenInput.name = 'item-type';
-                hiddenInput.value = selectEquipamento.value;
-                form.appendChild(hiddenInput);
-                selectEquipamento.disabled = true;
-            } else if (categoriaSelecionada === 'espaco') {
-                selectEquipamento.disabled = true;
-                // Move o valor para o select principal se necessário
-                const hiddenInput = document.createElement('input');
-                hiddenInput.type = 'hidden';
-                hiddenInput.name = 'item-type';
-                hiddenInput.value = selectEspaco.value;
-                form.appendChild(hiddenInput);
-                selectEspaco.disabled = true;
-            }
-        });
-    }
-
-    if (cancelBtn) {
-        cancelBtn.addEventListener('click', function (e) {
-            window.location.href = '/index.html';
-        });
-    }
-});
 
 // Inicializar quando o DOM estiver carregado
 document.addEventListener('DOMContentLoaded', inicializarCatalogo);

@@ -12,7 +12,11 @@
     <div class="container">
         <h1><i class="fas fa-plus-circle"></i> Cadastro de Itens</h1>
         
-    <form action="/cadastroItem.html" method="post">
+        <!-- Mensagens de feedback -->
+        <div id="successMessage" class="message message-success"></div>
+        <div id="errorMessage" class="message message-error"></div>
+        
+        <form id="itemForm" action="/cadastroItem.html" method="post">
             <div class="form-row">
                 <div class="form-group">
                     <label for="item-name">Nome do Item</label>
@@ -20,7 +24,7 @@
                 </div>
                 
                <div class="form-group">
-    <label for="tipo-categoria">Tipo de Item *</label>
+    <label for="tipo-categoria">Tipo de Item</label>
     <div class="tipo-categoria">
         <div class="categoria-opcoes">
             <div class="categoria-btn" data-categoria="equipamento">
@@ -41,10 +45,10 @@
                 <label>Selecione o tipo de equipamento:</label>
                 <select id="item-type-equipamento" name="item-type" class="form-control">
                     <option value="">Selecione uma categoria...</option>
-                    <option value="1">Equipamento Eletrônico</option>
-                    <option value="2">Material Didático</option>
-                    <option value="4">Ferramenta</option>
-                    <option value="5">Outros</option>
+                    <option value="1">Data-Show</option>
+                    <option value="2">Caixa de Som</option>
+                    <option value="4">Microfone</option>
+                    <option value="5">Notebook</option>
                 </select>
             </div>
         </div>
@@ -55,14 +59,16 @@
                 <label>Selecione o tipo de espaço:</label>
                 <select id="item-type-espaco" name="item-type" class="form-control">
                     <option value="">Selecione uma categoria...</option>
-                    <option value="3">Mobiliário</option>
-                    <option value="5">Outros</option>
+                    <option value="3">Laboratório</option>
+                    <option value="5">Auditório</option>
                 </select>
             </div>
         </div>
     </div>
     <input type="hidden" id="categoria-selecionada" name="categoria-selecionada" value="">
 </div>            
+            </div>
+            
             <div class="form-group">
                 <label for="item-description">Descrição</label>
                 <textarea id="item-description" name="item-description" rows="4" placeholder="Descreva o item ou equipamento..."></textarea>
@@ -75,8 +81,21 @@
                 </div>
                 
                 <div class="form-group">
-                    <label for="item-location">Localização</label>
-                    <input type="text" id="item-location" name="item-location" placeholder="Sala, prédio ou departamento">
+                    <div class="location-section">
+                        <div class="location-header">
+                            <label for="item-location">Localização</label>
+                            <button type="button" class="add-location-btn" id="addLocationBtn">
+                                <i class="fas fa-plus"></i> Nova Localização
+                            </button>
+                        </div>
+                        <select id="item-location" name="item-location" required>
+                            <option value="">Selecione uma localização...</option>
+                            <!-- Localizações serão carregadas aqui -->
+                        </select>
+                        <div class="location-list" id="locationList">
+                            <!-- Lista de localizações será exibida aqui -->
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -85,16 +104,84 @@
                 <textarea id="item-specs" name="item-specs" rows="3" placeholder="Informações técnicas relevantes..."></textarea>
             </div>
             
+            <div class="loading" id="loadingIndicator">
+                <div class="loading-spinner"></div>
+                <p>Salvando item...</p>
+            </div>
+            
             <div class="form-actions">
-                <button type="button" class="btn btn-secondary">
+                <button type="button" class="btn btn-secondary" id="cancelBtn">
                     <i class="fas fa-times"></i> Cancelar
                 </button>
-                <button type="submit" class="btn btn-primary">
+                <button type="submit" class="btn btn-primary" id="saveBtn">
                     <i class="fas fa-save"></i> Salvar Item
                 </button>
             </div>
         </form>
-        
+    </div>
+
+    <!-- Modal de Cadastro de Localização -->
+    <div class="modal-overlay" id="locationModal">
+        <div class="location-modal">
+            <div class="modal-header">
+                <h2><i class="fas fa-map-marker-alt"></i> Cadastrar Localização</h2>
+                <button class="close-modal" id="closeModal">&times;</button>
+            </div>
+            
+            <form class="location-form" id="locationForm">
+                <div class="form-group">
+                    <label for="location-name">Nome da Localização</label>
+                    <input type="text" id="location-name" placeholder="Ex: Laboratório de Informática, Sala 101" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>Tipo de Localização</label>
+                    <div class="location-type-buttons">
+                        <button type="button" class="location-type-btn" data-type="laboratorio">
+                            <i class="fas fa-flask"></i>
+                            <span>Laboratório</span>
+                        </button>
+                        <button type="button" class="location-type-btn" data-type="sala">
+                            <i class="fas fa-door-open"></i>
+                            <span>Sala</span>
+                        </button>
+                        <button type="button" class="location-type-btn" data-type="auditorio">
+                            <i class="fas fa-chalkboard-teacher"></i>
+                            <span>Auditório</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="location-building">Prédio/Bloco</label>
+                    <input type="text" id="location-building" placeholder="Ex: Bloco A, Prédio Central">
+                </div>
+                
+                <div class="form-group">
+                    <label for="location-floor">Andar</label>
+                    <input type="text" id="location-floor" placeholder="Ex: Térreo, 1º Andar">
+                </div>
+                
+                <div class="form-group">
+                    <label for="location-capacity">Capacidade (pessoas)</label>
+                    <input type="number" id="location-capacity" min="1" placeholder="Número máximo de pessoas">
+                </div>
+                
+                <div class="form-group">
+                    <label for="location-description">Descrição</label>
+                    <textarea id="location-description" rows="3" placeholder="Informações adicionais sobre o local..."></textarea>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelLocation">
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar Localização
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
 </body>
 </html>
