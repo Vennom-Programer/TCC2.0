@@ -98,12 +98,11 @@ def corrigir_integridade_banco():
             """)
             print("Tabela classificacao populada")
         
-        # 2. Adicionar tabela localizacao se não existir
+        # 2. Adicionar tabela localizacao se não existir com campos expandidos
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS localizacao (
                 id INT PRIMARY KEY AUTO_INCREMENT,
                 nome VARCHAR(100) NOT NULL,
-                descricao TEXT
             )
         """)
         
@@ -111,11 +110,11 @@ def corrigir_integridade_banco():
         cursor.execute("SELECT COUNT(*) FROM localizacao")
         if cursor.fetchone()['COUNT(*)'] == 0:
             cursor.execute("""
-                INSERT INTO localizacao (nome, descricao) VALUES 
-                ('Laboratório de Informática', 'Laboratório com computadores'),
-                ('Sala de Aula 101', 'Sala de aula padrão'),
-                ('Auditório Principal', 'Auditório com capacidade para 100 pessoas'),
-                ('Biblioteca', 'Setor de empréstimo de livros')
+                INSERT INTO localizacao (nome) VALUES 
+                ('Laboratório de Informática', 'laboratorio', 'Bloco A', 'Térreo', 30, 'Laboratório com computadores'),
+                ('Sala de Aula 101', 'sala', 'Bloco B', '1º Andar', 40, 'Sala de aula padrão'),
+                ('Auditório Principal', 'auditorio', 'Bloco Central', 'Térreo', 100, 'Auditório com capacidade para 100 pessoas'),
+                ('Biblioteca', 'sala', 'Bloco A', '2º Andar', 50, 'Setor de empréstimo de livros')
             """)
             print("Tabela localizacao populada")
         
@@ -419,6 +418,125 @@ def cadastroItensPost():
     except Exception as e:
         print(f"Erro ao cadastrar item: {e}")
         return redirect('/cadastroItem.html?error=1')
+    finally:
+        close_cursor(cursor)
+
+        # =============================================
+# API PARA CRIAR NOVA LOCALIZAÇÃO
+# =============================================
+
+@app.route('/api/localizacoes', methods=['POST'])
+def criar_localizacao():
+    """API para criar uma nova localização no banco de dados"""
+    check = require_login_or_redirect()
+    if check:
+        return jsonify({'success': False, 'error': 'Não autorizado'}), 401
+    
+    try:
+        data = request.get_json()
+        id = data.get('id')    
+        nome = data.get('nome')
+        
+        # Validação básica
+        if not nome:
+            return jsonify({'success': False, 'error': 'Nome da localização é obrigatório'}), 400
+        
+        cursor = None
+        try:
+            cursor = get_cursor()
+            
+            # Verificar se já existe uma localização com o mesmo nome
+            cursor.execute("SELECT id FROM localizacao WHERE nome = %s", (id, nome))
+            if cursor.fetchone():
+                return jsonify({'success': False, 'error': 'Já existe uma localização com este nome'}), 400
+            
+            # Inserir nova localização
+            query = """
+                INSERT INTO localizacao (id, nome)
+                VALUES (%s, %s)
+            """
+            values = (nome, id)
+            cursor.execute(query, values)
+            get_db_connection().commit()
+            
+            # Obter o ID da localização recém-criada
+            nova_localizacao_id = cursor.lastrowid
+            
+            return jsonify({
+                'success': True, 
+                'message': 'Localização criada com sucesso',
+                'localizacao': {
+                    'id': nova_localizacao_id,
+                    'nome': nome
+                }
+            })
+            
+        except mysql.connector.Error as e:
+            print(f"Erro ao criar localização: {e}")
+            return jsonify({'success': False, 'error': 'Erro ao salvar localização no banco de dados'}), 500
+        finally:
+            close_cursor(cursor)
+            
+    except Exception as e:
+        print(f"Erro geral ao criar localização: {e}")
+        return jsonify({'success': False, 'error': 'Erro interno do servidor'}), 500
+
+@app.route('/api/localizacoes', methods=['GET'])
+def obter_localizacoes():
+    """API para obter todas as localizações"""
+    check = require_login_or_redirect()
+    if check:
+        return jsonify({'success': False, 'error': 'Não autorizado'}), 401
+    
+    cursor = None
+    try:
+        cursor = get_cursor()
+        cursor.execute("SELECT id, nome FROM localizacao ORDER BY nome")
+        localizacoes = cursor.fetchall()
+        
+        return jsonify({
+            'success': True,
+            'localizacoes': localizacoes
+        })
+        
+    except Exception as e:
+        print(f"Erro ao buscar localizações: {e}")
+        return jsonify({'success': False, 'error': 'Erro interno do servidor'}), 500
+    finally:
+        close_cursor(cursor)
+
+@app.route('/api/localizacoes/<int:localizacao_id>', methods=['DELETE'])
+def excluir_localizacao(localizacao_id):
+            """API para excluir uma localização"""
+check = require_login_or_redirect()
+    if check:
+        return jsonify({'success': False, 'error': 'Não autorizado'}), 401
+    
+cursor = None
+try:
+        cursor = get_cursor()
+        
+            # Verificar se existem itens usando esta localização
+        cursor.execute("SELECT COUNT(*) as count FROM itens WHERE id_localizacao = %s", (localizacao_id,))
+        result = cursor.fetchone()
+        
+        if result['count'] > 0:
+            return jsonify({'success': False, 'error': 'Não é possível excluir localização com itens associados'}), 400
+        
+        # Verificar se a localização existe
+        cursor.execute("SELECT id FROM localizacao WHERE id = %s", (localizacao_id,))
+        if not cursor.fetchone():
+            return jsonify({'success': False, 'error': 'Localização não encontrada'}), 404
+        
+        # Excluir localização
+        cursor.execute("DELETE FROM localizacao WHERE id = %s", (localizacao_id,))
+        get_db_connection().commit()
+        
+        return jsonify({'success': True, 'message': 'Localização excluída com sucesso'})
+        
+    except mysql.connector.Error as e:
+        print(f"Erro ao excluir localização: {e}")
+        return jsonify({'success': False, 'error': 'Erro interno do servidor'}), 500
     finally:
         close_cursor(cursor)
 

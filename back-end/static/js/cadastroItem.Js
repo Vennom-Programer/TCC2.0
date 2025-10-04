@@ -1,14 +1,14 @@
 document.addEventListener('DOMContentLoaded', function () {
     class ItemManager {
         constructor() {
-            this.locations = JSON.parse(localStorage.getItem('locations')) || [];
+            this.locations = [];
             this.items = JSON.parse(localStorage.getItem('items')) || [];
             this.selectedLocationType = '';
             this.editingLocationIndex = null;
             
             this.initializeElements();
             this.attachEventListeners();
-            this.loadLocations();
+            this.loadLocationsFromServer();
             this.initializeCategorySelection();
         }
         
@@ -136,8 +136,27 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
         
-        // Carregar localizações no select e na lista
-        loadLocations() {
+        // Carregar localizações do servidor
+        async loadLocationsFromServer() {
+            try {
+                const response = await fetch('/api/localizacoes');
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.locations = data.localizacoes;
+                    this.updateLocationUI();
+                } else {
+                    console.error('Erro ao carregar localizações:', data.error);
+                    this.showError('Erro ao carregar localizações do servidor');
+                }
+            } catch (error) {
+                console.error('Erro ao carregar localizações:', error);
+                this.showError('Erro ao conectar com o servidor');
+            }
+        }
+        
+        // Atualizar interface com as localizações
+        updateLocationUI() {
             this.locationSelect.innerHTML = '<option value="">Selecione uma localização...</option>';
             this.locationList.innerHTML = '';
             
@@ -146,38 +165,30 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
             
-            this.locations.forEach((location, index) => {
+            this.locations.forEach((location) => {
                 // Adicionar ao select
                 const option = document.createElement('option');
                 option.value = location.id;
-                option.textContent = `${location.name} (${location.type})`;
+                option.textContent = location.nome;
                 this.locationSelect.appendChild(option);
                 
                 // Adicionar à lista
                 const locationItem = document.createElement('div');
                 locationItem.className = 'location-item';
                 locationItem.innerHTML = `
-                    <span>${location.name} - ${location.building || 'Sem prédio'} - ${location.floor || 'Sem andar'}</span>
-                    <div class="location-actions">
-                        <button class="location-edit" data-index="${index}">Editar</button>
-                        <button class="location-remove" data-index="${index}">Remover</button>
-                    </div>
+                    <span>${location.nome} ${location.tipo ? `- ${location.tipo}` : ''} ${location.predio ? `- ${location.predio}` : ''} ${location.andar ? `- ${location.andar}` : ''}</span>
+                    <button type="button" class="remove-location" data-id="${location.id}">
+                        <i class="fas fa-trash"></i>
+                    </button>
                 `;
                 this.locationList.appendChild(locationItem);
             });
             
-            // Adicionar event listeners para os botões de editar/remover
-            this.locationList.querySelectorAll('.location-edit').forEach(btn => {
+            // Adicionar event listeners para os botões de remover
+            this.locationList.querySelectorAll('.remove-location').forEach(btn => {
                 btn.addEventListener('click', (e) => {
-                    const index = parseInt(e.target.dataset.index);
-                    this.editLocation(index);
-                });
-            });
-            
-            this.locationList.querySelectorAll('.location-remove').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const index = parseInt(e.target.dataset.index);
-                    this.removeLocation(index);
+                    const locationId = e.currentTarget.getAttribute('data-id');
+                    this.removeLocationFromServer(locationId);
                 });
             });
         }
@@ -203,8 +214,8 @@ document.addEventListener('DOMContentLoaded', function () {
             this.locationModal.style.display = 'none';
         }
         
-        // Salvar localização
-        handleLocationSubmit(e) {
+        // Salvar localização no servidor
+        async handleLocationSubmit(e) {
             e.preventDefault();
             
             if (!this.selectedLocationType) {
@@ -213,66 +224,64 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             const locationData = {
-                id: this.editingLocationIndex !== null ? this.locations[this.editingLocationIndex].id : Date.now(),
-                name: document.getElementById('location-name').value,
-                type: this.selectedLocationType,
-                building: document.getElementById('location-building').value,
-                floor: document.getElementById('location-floor').value,
-                capacity: document.getElementById('location-capacity').value,
-                description: document.getElementById('location-description').value
+                nome: document.getElementById('location-name').value,
             };
 
-            if (this.editingLocationIndex !== null) {
-                // Atualizar localização existente
-                this.locations[this.editingLocationIndex] = locationData;
-            } else {
-                // Adicionar nova localização
-                this.locations.push(locationData);
+            try {
+                const response = await fetch('/api/localizacoes', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(locationData)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Recarregar a lista de localizações
+                    await this.loadLocationsFromServer();
+                    
+                    // Selecionar automaticamente a nova localização
+                    this.locationSelect.value = data.localizacao.id;
+                    
+                    // Fechar o modal
+                    this.closeLocationModal();
+                    
+                    // Mostrar mensagem de sucesso
+                    this.showSuccess('Localização criada com sucesso!');
+                } else {
+                    this.showError(data.error || 'Erro ao criar localização');
+                }
+                
+            } catch (error) {
+                console.error('Erro ao salvar localização:', error);
+                this.showError('Erro ao conectar com o servidor');
+            }
+        }
+        
+        // Remover localização do servidor
+        async removeLocationFromServer(locationId) {
+            if (!confirm('Tem certeza que deseja remover esta localização?')) {
+                return;
             }
             
-            localStorage.setItem('locations', JSON.stringify(this.locations));
-            
-            this.loadLocations();
-            this.closeLocationModal();
-            
-            this.showSuccess(this.editingLocationIndex !== null ? 
-                'Localização atualizada com sucesso!' : 
-                'Localização cadastrada com sucesso!');
-            
-            this.editingLocationIndex = null;
-        }
-        
-        // Editar localização
-        editLocation(index) {
-            const location = this.locations[index];
-            
-            // Preencher formulário
-            document.getElementById('location-name').value = location.name;
-            document.getElementById('location-building').value = location.building || '';
-            document.getElementById('location-floor').value = location.floor || '';
-            document.getElementById('location-capacity').value = location.capacity || '';
-            document.getElementById('location-description').value = location.description || '';
-            
-            // Selecionar tipo
-            this.locationTypeButtons.forEach(btn => {
-                btn.classList.remove('selected');
-                if (btn.dataset.type === location.type) {
-                    btn.classList.add('selected');
-                    this.selectedLocationType = location.type;
+            try {
+                const response = await fetch(`/api/localizacoes/${locationId}`, {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    await this.loadLocationsFromServer();
+                    this.showSuccess('Localização removida com sucesso!');
+                } else {
+                    this.showError(data.error || 'Erro ao remover localização');
                 }
-            });
-            
-            this.editingLocationIndex = index;
-            this.locationModal.style.display = 'flex';
-        }
-        
-        // Remover localização
-        removeLocation(index) {
-            if (confirm('Tem certeza que deseja remover esta localização?')) {
-                this.locations.splice(index, 1);
-                localStorage.setItem('locations', JSON.stringify(this.locations));
-                this.loadLocations();
-                this.showSuccess('Localização removida com sucesso!');
+            } catch (error) {
+                console.error('Erro ao remover localização:', error);
+                this.showError('Erro ao conectar com o servidor');
             }
         }
         
