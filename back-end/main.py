@@ -39,6 +39,8 @@ def close_cursor(cursor):
     except Exception as e:
         print(f"Erro ao fechar cursor: {e}")
 
+        
+
 # =============================================
 # NOVA FUNÇÃO: POPULAR CLASSIFICAÇÕES
 # =============================================
@@ -98,23 +100,22 @@ def corrigir_integridade_banco():
             """)
             print("Tabela classificacao populada")
         
-        # 2. Adicionar tabela localizacao se não existir com campos expandidos
+       # 2. Adicionar tabela localizacao se não existir com campos expandidos
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS localizacao (
-                id INT PRIMARY KEY AUTO_INCREMENT,
-                nome VARCHAR(100) NOT NULL,
+        CREATE TABLE IF NOT EXISTS localizacao (
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            nome VARCHAR(100) NOT NULL
             )
-        """)
+            """)
         
         # Popular localizacao se estiver vazia
         cursor.execute("SELECT COUNT(*) FROM localizacao")
         if cursor.fetchone()['COUNT(*)'] == 0:
             cursor.execute("""
                 INSERT INTO localizacao (nome) VALUES 
-                ('Laboratório de Informática', 'laboratorio', 'Bloco A', 'Térreo', 30, 'Laboratório com computadores'),
-                ('Sala de Aula 101', 'sala', 'Bloco B', '1º Andar', 40, 'Sala de aula padrão'),
-                ('Auditório Principal', 'auditorio', 'Bloco Central', 'Térreo', 100, 'Auditório com capacidade para 100 pessoas'),
-                ('Biblioteca', 'sala', 'Bloco A', '2º Andar', 50, 'Setor de empréstimo de livros')
+                ('Laboratório de Informática'),
+                ('Auditório'),
+                ('Sala'),
             """)
             print("Tabela localizacao populada")
         
@@ -129,6 +130,40 @@ def corrigir_integridade_banco():
 with app.app_context():
     popular_classificacoes()
     corrigir_integridade_banco()
+
+
+def verificar_tabela_itens():
+    """Verifica e cria a tabela itens se não existir"""
+    cursor = None
+    try:
+        cursor = get_cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS itens (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                Nome VARCHAR(255) NOT NULL,
+                id_classificacao INT NOT NULL,
+                descricao TEXT,
+                quantidade INT NOT NULL DEFAULT 1,
+                id_localizacao INT NOT NULL,
+                especificacoestec TEXT,
+                categoria VARCHAR(50),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (id_classificacao) REFERENCES classificacao(id),
+                FOREIGN KEY (id_localizacao) REFERENCES localizacao(id)
+            )
+        """)
+        get_db_connection().commit()
+        print("Tabela itens verificada/criada com sucesso")
+    except Exception as e:
+        print(f"Erro ao verificar/criar tabela itens: {e}")
+    finally:
+        close_cursor(cursor)
+
+# Adicione esta chamada na inicialização
+with app.app_context():
+    popular_classificacoes()
+    corrigir_integridade_banco()
+    verificar_tabela_itens()  # ← ADICIONE ESTA LINHA
 
 # =============================================
 # FUNÇÕES AUXILIARES CORRIGIDAS
@@ -333,7 +368,11 @@ def index():
 @app.route('/voltar_index')
 def voltar_index():
     """Rota para voltar para a página index"""
-    return redirect(url_for('index.html'))
+    return redirect(url_for('index'))
+
+# =============================================
+# CADASTRO DE ITENS - CORRIGIDO
+# =============================================
 
 # =============================================
 # CADASTRO DE ITENS - CORRIGIDO
@@ -354,7 +393,7 @@ def cadastroItens():
         classificacoes = cursor_classificacoes.fetchall()
         
         cursor_localizacoes = get_cursor()
-        cursor_localizacoes.execute("SELECT id, nome FROM localizacao")
+        cursor_localizacoes.execute("SELECT id, nome FROM localizacao ORDER BY nome")
         localizacoes = cursor_localizacoes.fetchall()
         
         return render_template('cadastroItem.html', 
@@ -381,8 +420,18 @@ def cadastroItensPost():
     especificacoestec = request.form.get('item-specs')
     categoria = request.form.get('categoria')
     
+    print(f"Dados recebidos do formulário:")
+    print(f"Nome: {nome}")
+    print(f"ID Classificação: {id_classificacao}")
+    print(f"Descrição: {descricao}")
+    print(f"Quantidade: {quantidade}")
+    print(f"ID Localização: {id_localizacao}")
+    print(f"Especificações: {especificacoestec}")
+    print(f"Categoria: {categoria}")
+    
     # Validações básicas
     if not nome or not id_classificacao or not quantidade or not id_localizacao:
+        print("Erro: Campos obrigatórios não preenchidos")
         return redirect('/cadastroItem.html?error=campos_obrigatorios')
     
     try:
@@ -393,35 +442,65 @@ def cadastroItensPost():
         return redirect('/cadastroItem.html?error=quantidade_invalida')
     
     # Validação categoria vs classificação
-    id_classificacao_int = int(id_classificacao)
-    
-    if categoria == 'equipamento' and id_classificacao_int == 3:
-        return redirect('/cadastroItem.html?error=incompativel_equipamento')
-    
-    if categoria == 'espaco' and id_classificacao_int != 3:
-        return redirect('/cadastroItem.html?error=incompativel_espaco')
+    try:
+        id_classificacao_int = int(id_classificacao)
+        
+        if categoria == 'equipamento' and id_classificacao_int == 3:
+            return redirect('/cadastroItem.html?error=incompativel_equipamento')
+        
+        if categoria == 'espaco' and id_classificacao_int != 3:
+            return redirect('/cadastroItem.html?error=incompativel_espaco')
+    except ValueError:
+        return redirect('/cadastroItem.html?error=classificacao_invalida')
     
     cursor = None
     try:
         cursor = get_cursor()
+        
+        # Verificar se a classificação existe
+        cursor.execute("SELECT id FROM classificacao WHERE id = %s", (id_classificacao,))
+        if not cursor.fetchone():
+            return redirect('/cadastroItem.html?error=classificacao_nao_existe')
+        
+        # Verificar se a localização existe
+        cursor.execute("SELECT id FROM localizacao WHERE id = %s", (id_localizacao,))
+        if not cursor.fetchone():
+            return redirect('/cadastroItem.html?error=localizacao_nao_existe')
+        
+        # Inserir item no banco de dados
         query = """
-        INSERT INTO itens (Nome, id_classificacao, descricao, quantidade, id_localizacao, especificacoestec)
-        VALUES (%s, %s, %s, %s, %s, %s)
+        INSERT INTO itens (Nome, id_classificacao, descricao, quantidade, id_localizacao, especificacoestec, categoria)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         """
-        values = (nome, id_classificacao, descricao, quantidade, id_localizacao, especificacoestec)
+        values = (nome, id_classificacao, descricao, quantidade, id_localizacao, especificacoestec, categoria)
+        
+        print(f"Executando query: {query}")
+        print(f"Com valores: {values}")
+        
         cursor.execute(query, values)
-        get_db_connection().commit()
+        
+        # COMMIT EXPLÍCITO para garantir que os dados sejam salvos
+        connection = get_db_connection()
+        connection.commit()
+        
+        print("Item cadastrado com sucesso no banco de dados!")
+        
+        # Redirecionar para o catálogo com mensagem de sucesso
         return redirect('/catalogo.html?success=1')
+        
     except mysql.connector.IntegrityError as e:
         print(f"Erro de integridade ao cadastrar item: {e}")
         return redirect('/cadastroItem.html?error=integridade')
+    except mysql.connector.Error as e:
+        print(f"Erro MySQL ao cadastrar item: {e}")
+        return redirect('/cadastroItem.html?error=banco_dados')
     except Exception as e:
         print(f"Erro ao cadastrar item: {e}")
         return redirect('/cadastroItem.html?error=1')
     finally:
         close_cursor(cursor)
 
-        # =============================================
+# =============================================
 # API PARA CRIAR NOVA LOCALIZAÇÃO
 # =============================================
 
@@ -434,7 +513,6 @@ def criar_localizacao():
     
     try:
         data = request.get_json()
-        id = data.get('id')    
         nome = data.get('nome')
         
         # Validação básica
@@ -446,16 +524,16 @@ def criar_localizacao():
             cursor = get_cursor()
             
             # Verificar se já existe uma localização com o mesmo nome
-            cursor.execute("SELECT id FROM localizacao WHERE nome = %s", (id, nome))
+            cursor.execute("SELECT id FROM localizacao WHERE nome = %s", (nome,))
             if cursor.fetchone():
                 return jsonify({'success': False, 'error': 'Já existe uma localização com este nome'}), 400
             
             # Inserir nova localização
             query = """
-                INSERT INTO localizacao (id, nome)
-                VALUES (%s, %s)
+                INSERT INTO localizacao (nome)
+                VALUES (%s)
             """
-            values = (nome, id)
+            values = (nome,)  # ← CORRIGIDO: adicione a vírgula para criar uma tupla
             cursor.execute(query, values)
             get_db_connection().commit()
             
@@ -471,6 +549,9 @@ def criar_localizacao():
                 }
             })
             
+        except mysql.connector.IntegrityError as e:
+            print(f"Erro de integridade ao criar localização: {e}")
+            return jsonify({'success': False, 'error': 'Erro de integridade do banco de dados'}), 500
         except mysql.connector.Error as e:
             print(f"Erro ao criar localização: {e}")
             return jsonify({'success': False, 'error': 'Erro ao salvar localização no banco de dados'}), 500
@@ -507,16 +588,16 @@ def obter_localizacoes():
 
 @app.route('/api/localizacoes/<int:localizacao_id>', methods=['DELETE'])
 def excluir_localizacao(localizacao_id):
-            """API para excluir uma localização"""
-check = require_login_or_redirect()
+    """API para excluir uma localização"""
+    check = require_login_or_redirect()
     if check:
         return jsonify({'success': False, 'error': 'Não autorizado'}), 401
     
-cursor = None
-try:
+    cursor = None
+    try:
         cursor = get_cursor()
         
-            # Verificar se existem itens usando esta localização
+        # Verificar se existem itens usando esta localização
         cursor.execute("SELECT COUNT(*) as count FROM itens WHERE id_localizacao = %s", (localizacao_id,))
         result = cursor.fetchone()
         
@@ -540,7 +621,6 @@ try:
     finally:
         close_cursor(cursor)
 
-
 @app.route('/catalogo.html')
 def catalogo():
     check = require_login_or_redirect()
@@ -551,14 +631,14 @@ def catalogo():
     try:
         cursor = get_cursor()
         cursor.execute("""
-    SELECT i.id, i.Nome, i.descricao, i.quantidade, 
-           c.nome as classificacao, l.nome as localizacao, 
-           i.especificacoestec, i.categoria 
-    FROM itens i 
-    JOIN classificacao c ON i.id_classificacao = c.id 
-    JOIN localizacao l ON i.id_localizacao = l.id 
-    ORDER BY i.Nome
-""")
+            SELECT i.id, i.Nome, i.descricao, i.quantidade, 
+                   c.nome as classificacao, l.nome as localizacao, 
+                   i.especificacoestec, i.id_classificacao, i.id_localizacao
+            FROM itens i 
+            JOIN classificacao c ON i.id_classificacao = c.id 
+            JOIN localizacao l ON i.id_localizacao = l.id 
+            ORDER BY i.Nome
+        """)
         itens = cursor.fetchall()
         
         # Buscar informações do usuário logado
@@ -581,6 +661,38 @@ def catalogo():
             'is_admin': session.get('usuario_role') == 'adm'
         }
         return render_template('catalogo.html', itens=[], user=usuario_info)
+    finally:
+        close_cursor(cursor)
+
+@app.route('/api/catalogo/itens')
+def api_catalogo_itens():
+    """API para retornar itens do catálogo"""
+    check = require_login_or_redirect()
+    if check:
+        return jsonify({'success': False, 'error': 'Não autorizado'}), 401
+    
+    cursor = None
+    try:
+        cursor = get_cursor()
+        cursor.execute("""
+            SELECT i.id, i.Nome, i.descricao, i.quantidade, 
+                   c.nome as classificacao, l.nome as localizacao, 
+                   i.especificacoestec, i.id_classificacao, i.id_localizacao
+            FROM itens i 
+            JOIN classificacao c ON i.id_classificacao = c.id 
+            JOIN localizacao l ON i.id_localizacao = l.id 
+            ORDER BY i.Nome
+        """)
+        itens = cursor.fetchall()
+        
+        return jsonify({
+            'success': True,
+            'itens': itens
+        })
+        
+    except Exception as e:
+        print(f"Erro ao buscar itens do catálogo: {e}")
+        return jsonify({'success': False, 'error': 'Erro interno do servidor'}), 500
     finally:
         close_cursor(cursor)
 

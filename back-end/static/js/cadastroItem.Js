@@ -285,69 +285,67 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
         
-        // Salvar item - CORRIGIDO: Agora envia para o servidor
-        async handleItemSubmit(e) {
-            e.preventDefault();
-            
-            // Validar formulário
-            if (!this.validateForm()) {
-                return;
-            }
-            
-            // Mostrar indicador de carregamento
-            this.showLoading(true);
-            
-            try {
-                // Coletar dados do formulário
-                const formData = new FormData();
-                
-                // Adicionar todos os campos necessários para o banco de dados
-                formData.append('item-name', document.getElementById('item-name').value);
-                formData.append('item-type', this.tipoHiddenInput.value);
-                formData.append('item-description', document.getElementById('item-description').value);
-                formData.append('item-quantity', document.getElementById('item-quantity').value);
-                formData.append('item-location', document.getElementById('item-location').value);
-                formData.append('item-specs', document.getElementById('item-specs').value);
-                formData.append('categoria', this.categoriaHiddenInput.value);
-                
-                console.log('Enviando dados para o servidor:', {
-                    nome: document.getElementById('item-name').value,
-                    tipo: this.tipoHiddenInput.value,
-                    descricao: document.getElementById('item-description').value,
-                    quantidade: document.getElementById('item-quantity').value,
-                    localizacao: document.getElementById('item-location').value,
-                    especificacoes: document.getElementById('item-specs').value,
-                    categoria: this.categoriaHiddenInput.value
-                });
-                
-                // Enviar para o servidor Flask
-                const response = await fetch('/cadastroItem.html', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (response.redirected) {
-                    // Se o servidor redirecionou, seguir o redirecionamento
-                    window.location.href = response.url;
-                } else if (response.ok) {
-                    // Se a resposta foi bem-sucedida sem redirecionamento
-                    this.showSuccess('Item cadastrado com sucesso!');
-                    setTimeout(() => {
-                        window.location.href = '/catalogo.html';
-                    }, 2000);
-                } else {
-                    // Tratar erros do servidor
-                    const errorText = await response.text();
-                    throw new Error('Erro do servidor: ' + response.status);
-                }
-                
-            } catch (error) {
-                console.error('Erro ao salvar item:', error);
-                this.showError('Erro ao salvar item. Tente novamente.');
-            } finally {
-                this.showLoading(false);
+        // cadastroItem.js - ATUALIZADO
+// ... (código anterior mantido)
+
+// Salvar item - CORRIGIDO: Agora envia para o servidor
+async handleItemSubmit(e) {
+    e.preventDefault();
+    
+    // Validar formulário
+    if (!this.validateForm()) {
+        return;
+    }
+    
+    // Mostrar indicador de carregamento
+    this.showLoading(true);
+    
+    try {
+        // Coletar dados do formulário
+        const formData = new FormData(this.itemForm);
+        
+        // Garantir que todos os campos necessários estão incluídos
+        const formDataObj = {
+            'item-name': document.getElementById('item-name').value,
+            'item-type': this.tipoHiddenInput.value,
+            'item-description': document.getElementById('item-description').value,
+            'item-quantity': document.getElementById('item-quantity').value,
+            'item-location': document.getElementById('item-location').value,
+            'item-specs': document.getElementById('item-specs').value,
+            'categoria': this.categoriaHiddenInput.value
+        };
+        
+        console.log('Enviando dados para o servidor:', formDataObj);
+        
+        // Enviar para o servidor Flask usando FormData
+        const response = await fetch('/cadastroItem.html', {
+            method: 'POST',
+            body: new URLSearchParams(formDataObj)
+        });
+        
+        if (response.redirected) {
+            // Se o servidor redirecionou, seguir o redirecionamento
+            window.location.href = response.url;
+        } else {
+            // Se não houve redirecionamento, verificar se foi bem-sucedido
+            const result = await response.text();
+            if (response.ok) {
+                this.showSuccess('Item cadastrado com sucesso!');
+                setTimeout(() => {
+                    window.location.href = '/catalogo.html?success=1';
+                }, 2000);
+            } else {
+                throw new Error('Erro do servidor: ' + response.status);
             }
         }
+        
+    } catch (error) {
+        console.error('Erro ao salvar item:', error);
+        this.showError('Erro ao salvar item. Tente novamente.');
+    } finally {
+        this.showLoading(false);
+    }
+}
         
         // Validar formulário
         validateForm() {

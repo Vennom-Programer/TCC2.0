@@ -45,9 +45,90 @@ const resourcesTable = document.getElementById('resourcesTable');
 // Variável para armazenar a linha sendo editada
 let currentEditRow = null;
 
+// =============================================
+// NOVAS FUNÇÕES PARA CARREGAR ITENS DO BANCO
+// =============================================
+
+// Carregar itens do banco de dados
+async function carregarItensDoBanco() {
+    try {
+        console.log('Carregando itens do banco de dados...');
+        
+        const response = await fetch('/api/catalogo/itens');
+        const data = await response.json();
+        
+        if (data.success) {
+            console.log('Itens carregados:', data.itens);
+            preencherTabela(data.itens);
+        } else {
+            console.error('Erro ao carregar itens:', data.error);
+            alert('Erro ao carregar itens do catálogo');
+        }
+    } catch (error) {
+        console.error('Erro ao carregar itens:', error);
+        alert('Erro de conexão ao carregar itens');
+    }
+}
+
+// Preencher a tabela com os itens
+function preencherTabela(itens) {
+    const tbody = resourcesTable.querySelector('tbody');
+    
+    if (!tbody) {
+        console.error('Elemento tbody não encontrado');
+        return;
+    }
+    
+    // Limpar tabela
+    tbody.innerHTML = '';
+    
+    if (itens.length === 0) {
+        const colCount = resourcesTable.querySelector('thead tr').cells.length;
+        tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; padding: 20px;">Nenhum item cadastrado</td></tr>`;
+        return;
+    }
+    
+    // Adicionar cada item na tabela
+    itens.forEach(item => {
+        const row = document.createElement('tr');
+        
+        // Determinar ações baseado no tipo de usuário
+        const acoes = isRealAdmin ? `
+            <td class="actions admin-only">
+                <button class="btn btn-edit" data-id="${item.id}">Editar</button>
+                <button class="btn btn-delete" data-id="${item.id}">Excluir</button>
+            </td>
+        ` : '<td class="actions">-</td>';
+        
+        row.innerHTML = `
+            <td>${item.Nome || ''}</td>
+            <td>${item.quantidade || 0}</td>
+            <td>${item.classificacao || ''}</td>
+            <td>${item.localizacao || ''}</td>
+            <td>${item.descricao || 'Sem descrição'}</td>
+            <td>${item.especificacoestec || 'N/A'}</td>
+            ${acoes}
+        `;
+        
+        tbody.appendChild(row);
+    });
+    
+    // Adicionar eventos aos botões se for admin
+    if (isRealAdmin) {
+        adicionarEventosBotoes();
+    }
+}
+
+// =============================================
+// FUNÇÕES ORIGINAIS MODIFICADAS
+// =============================================
+
 // Inicialização baseada no tipo de usuário
-function inicializarCatalogo() {
+async function inicializarCatalogo() {
     console.log('Inicializando catálogo, usuário é admin:', isRealAdmin);
+    
+    // Carregar itens do banco de dados
+    await carregarItensDoBanco();
     
     // Configurar controles de acesso apenas para admins reais
     if (isRealAdmin && adminModeBtn && userModeBtn) {
@@ -93,24 +174,25 @@ function inicializarCatalogo() {
     if (searchInput) {
         searchInput.addEventListener('keyup', function() {
             const searchText = this.value.toLowerCase();
-            const rows = resourcesTable.querySelectorAll('tr');
+            const rows = resourcesTable.querySelectorAll('tbody tr');
             
-            // Pular a primeira linha (cabeçalho)
-            for (let i = 1; i < rows.length; i++) {
-                const row = rows[i];
+            rows.forEach(row => {
                 const cells = row.querySelectorAll('td');
                 const name = cells[0].textContent.toLowerCase();
+                const quantity = cells[1].textContent.toLowerCase();
                 const classification = cells[2] ? cells[2].textContent.toLowerCase() : '';
                 const location = cells[3] ? cells[3].textContent.toLowerCase() : '';
                 const description = cells[4] ? cells[4].textContent.toLowerCase() : '';
+                const specs = cells[5] ? cells[5].textContent.toLowerCase() : '';
                 
                 if (name.includes(searchText) || classification.includes(searchText) || 
-                    location.includes(searchText) || description.includes(searchText)) {
+                    location.includes(searchText) || description.includes(searchText) ||
+                    specs.includes(searchText) || quantity.includes(searchText)) {
                     row.style.display = '';
                 } else {
                     row.style.display = 'none';
                 }
-            }
+            });
         });
     }
 
@@ -135,26 +217,6 @@ function inicializarCatalogo() {
 
 // Configurar eventos administrativos
 function configurarEventosAdmin() {
-    // Abrir modal de edição
-    document.querySelectorAll('.btn-edit').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const row = this.closest('tr');
-            const cells = row.querySelectorAll('td');
-            
-            // Preencher o modal com os dados atuais
-            editName.value = cells[0].textContent;
-            editQuantity.value = cells[1].textContent;
-            editId.value = this.getAttribute('data-id');
-            editDescription.value = cells[4].textContent;
-            
-            // Armazenar a linha sendo editada
-            currentEditRow = row;
-            
-            // Exibir o modal
-            editModal.style.display = 'flex';
-        });
-    });
-    
     // Abrir modal de adição
     if (addResourceBtn) {
         addResourceBtn.addEventListener('click', () => {
@@ -184,61 +246,64 @@ function configurarEventosAdmin() {
     
     // Salvar edição
     if (saveEditBtn) {
-        saveEditBtn.addEventListener('click', () => {
+        saveEditBtn.addEventListener('click', async () => {
             if (currentEditRow) {
-                const cells = currentEditRow.querySelectorAll('td');
-                cells[0].textContent = editName.value;
-                cells[1].textContent = editQuantity.value;
-                cells[4].textContent = editDescription.value;
-                
-                alert("Recurso atualizado com sucesso!");
-                closeModal();
+                try {
+                    // Aqui você implementaria a atualização no banco
+                    const itemId = editId.value;
+                    const updatedData = {
+                        nome: editName.value,
+                        quantidade: editQuantity.value,
+                        descricao: editDescription.value
+                    };
+                    
+                    // TODO: Implementar chamada API para atualizar no banco
+                    console.log('Atualizando item:', itemId, updatedData);
+                    
+                    // Atualizar visualmente
+                    const cells = currentEditRow.querySelectorAll('td');
+                    cells[0].textContent = editName.value;
+                    cells[1].textContent = editQuantity.value;
+                    cells[4].textContent = editDescription.value;
+                    
+                    alert("Recurso atualizado com sucesso!");
+                    closeModal();
+                } catch (error) {
+                    console.error('Erro ao atualizar item:', error);
+                    alert("Erro ao atualizar recurso");
+                }
             }
         });
     }
     
     // Salvar novo recurso
     if (saveAddBtn) {
-        saveAddBtn.addEventListener('click', () => {
+        saveAddBtn.addEventListener('click', async () => {
             if (addName.value && addQuantity.value) {
-                // Criar nova linha na tabela
-                const newRow = document.createElement('tr');
-                const newId = 'temp-' + Date.now(); // ID temporário
-                
-                newRow.innerHTML = `
-                    <td>${addName.value}</td>
-                    <td>${addQuantity.value}</td>
-                    <td>Nova Classificação</td>
-                    <td>Nova Localização</td>
-                    <td>${addDescription.value || 'Sem descrição'}</td>
-                    <td>N/A</td>
-                    <td>N/A</td>
-                    <td class="actions admin-only">
-                        <button class="btn btn-edit" data-id="${newId}">Editar</button>
-                        <button class="btn btn-delete" data-id="${newId}">Excluir</button>
-                    </td>
-                `;
-                
-                // Adicionar a nova linha à tabela (antes da última linha se existir mensagem de vazio)
-                const emptyRow = resourcesTable.querySelector('tr td[colspan]');
-                if (emptyRow) {
-                    emptyRow.closest('tr').remove();
+                try {
+                    // TODO: Implementar chamada API para adicionar no banco
+                    const newItem = {
+                        nome: addName.value,
+                        quantidade: addQuantity.value,
+                        descricao: addDescription.value
+                    };
+                    
+                    console.log('Adicionando novo item:', newItem);
+                    
+                    // Recarregar itens do banco
+                    await carregarItensDoBanco();
+                    
+                    alert("Recurso adicionado com sucesso!");
+                    closeModal();
+                } catch (error) {
+                    console.error('Erro ao adicionar item:', error);
+                    alert("Erro ao adicionar recurso");
                 }
-                resourcesTable.appendChild(newRow);
-                
-                // Adicionar eventos aos novos botões
-                adicionarEventosBotoes();
-                
-                alert("Recurso adicionado com sucesso!");
-                closeModal();
             } else {
                 alert("Por favor, preencha pelo menos o nome e quantidade.");
             }
         });
     }
-    
-    // Adicionar eventos para os botões de excluir existentes
-    adicionarEventosBotoes();
     
     // Fechar modal clicando fora dele
     window.addEventListener('click', (e) => {
@@ -253,17 +318,11 @@ function adicionarEventosBotoes() {
     
     document.querySelectorAll('.btn-edit').forEach(btn => {
         // Remover event listeners existentes para evitar duplicação
-        btn.replaceWith(btn.cloneNode(true));
-    });
-    
-    document.querySelectorAll('.btn-delete').forEach(btn => {
-        // Remover event listeners existentes para evitar duplicação
-        btn.replaceWith(btn.cloneNode(true));
-    });
-    
-    // Adicionar novos event listeners
-    document.querySelectorAll('.btn-edit').forEach(btn => {
-        btn.addEventListener('click', function() {
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+        
+        // Adicionar novo event listener
+        newBtn.addEventListener('click', function() {
             const row = this.closest('tr');
             const cells = row.querySelectorAll('td');
             
@@ -278,21 +337,32 @@ function adicionarEventosBotoes() {
     });
     
     document.querySelectorAll('.btn-delete').forEach(btn => {
-        btn.addEventListener('click', function() {
+        // Remover event listeners existentes para evitar duplicação
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+        
+        // Adicionar novo event listener
+        newBtn.addEventListener('click', async function() {
             const row = this.closest('tr');
             const name = row.querySelector('td:first-child').textContent;
+            const itemId = this.getAttribute('data-id');
+            
             if (confirm(`Tem certeza que deseja excluir o recurso "${name}"?`)) {
-                row.remove();
-                
-                // Se não houver mais linhas, adicionar mensagem de vazio
-                if (resourcesTable.querySelectorAll('tr').length <= 1) {
-                    const emptyRow = document.createElement('tr');
-                    const colCount = document.querySelector('thead tr').cells.length;
-                    emptyRow.innerHTML = `<td colspan="${colCount}">Nenhum item encontrado.</td>`;
-                    resourcesTable.appendChild(emptyRow);
+                try {
+                    // TODO: Implementar chamada API para excluir do banco
+                    console.log('Excluindo item:', itemId);
+                    
+                    // Remover visualmente
+                    row.remove();
+                    
+                    // Recarregar itens se necessário
+                    await carregarItensDoBanco();
+                    
+                    alert("Recurso excluído com sucesso!");
+                } catch (error) {
+                    console.error('Erro ao excluir item:', error);
+                    alert("Erro ao excluir recurso");
                 }
-                
-                alert("Recurso excluído com sucesso!");
             }
         });
     });
