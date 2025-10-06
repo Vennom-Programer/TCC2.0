@@ -12,7 +12,7 @@
     <nav class="navbar">
         <div class="nav-container">
             <div class="nav-logo">
-                <h2>Sistema de Reservas</h2>
+                <h2>SmartReserva - Catálogo</h2>
             </div>
             <div class="nav-user">
                 {% if user %}
@@ -61,40 +61,38 @@
                 <th>Localização</th>
                 <th>Descrição</th>
                 <th>Especificações Técnicas</th>
-                <th>Categoria</th>
                 {% if user and user.is_admin %}
                 <th class="admin-only">Ações</th>
                 {% endif %}
             </tr>
         </thead>
         <tbody id="resourcesTable">
-            {% if itens %}
-                {% for item in itens %}
-                <tr>
-                    <td>{{ item.id }}</td>
-                    <td>{{ item.Nome }}</td>
-                    <td>{{ item.quantidade }}</td>
-                    <td>{{ item.classificacao }}</td>
-                    <td>{{ item.localizacao }}</td>
-                    <td>{{ item.descricao or 'N/A' }}</td>
-                    <td>{{ item.especificacoestec or 'N/A' }}</td>
-                    <td>{{ item.categoria or 'N/A' }}</td>
-                    {% if user and user.is_admin %}
-                    <td class="actions admin-only">
-                        <button class="btn btn-edit" data-id="{{ item.id }}">Editar</button>
-                        <button class="btn btn-delete" data-id="{{ item.id }}">Excluir</button>
-                    </td>
-                    {% endif %}
-                </tr>
-                {% endfor %}
-            {% else %}
-                <tr>
-                    <td colspan="{% if user and user.is_admin %}9{% else %}8{% endif %}" style="text-align: center; padding: 20px;">
-                        Nenhum item encontrado no catálogo.
-                    </td>
-                </tr>
+    {% if itens %}
+        {% for item in itens %}
+        <tr>
+            <td>{{ item.id }}</td>  <!-- COLUNA ID ADICIONADA -->
+            <td>{{ item.Nome }}</td>
+            <td>{{ item.quantidade }}</td>
+            <td>{{ item.classificacao }}</td>
+            <td>{{ item.localizacao }}</td>
+            <td>{{ item.descricao or 'N/A' }}</td>
+            <td>{{ item.especificacoestec or 'N/A' }}</td>
+            {% if user and user.is_admin %}
+            <td class="actions admin-only">
+                <button class="btn btn-edit" data-id="{{ item.id }}">Editar</button>
+                <button class="btn btn-delete" data-id="{{ item.id }}">Excluir</button>
+            </td>
             {% endif %}
-        </tbody>
+        </tr>
+        {% endfor %}
+    {% else %}
+        <tr>
+            <td colspan="{% if user and user.is_admin %}8{% else %}7{% endif %}" style="text-align: center; padding: 20px;">
+                Nenhum item encontrado no catálogo.
+            </td>
+        </tr>
+    {% endif %}
+</tbody>
     </table>
 
     <!-- Botão para adicionar novo item (apenas admin) -->
@@ -132,45 +130,7 @@
             </form>
         </div>
     </div>
-
-    <!-- Modal de Adição -->
-    <div id="addModal" class="modal">
-        <div class="modal-content">
-            <h2>Adicionar Novo Item</h2>
-            <form id="addForm">
-                <div class="form-group">
-                    <label for="add-name">Nome:</label>
-                    <input type="text" id="add-name" required>
-                </div>
-                <div class="form-group">
-                    <label for="add-quantity">Quantidade:</label>
-                    <input type="number" id="add-quantity" min="1" required>
-                </div>
-                <div class="form-group">
-                    <label for="add-description">Descrição:</label>
-                    <textarea id="add-description"></textarea>
-                </div>
-                <div class="form-actions">
-                    <button type="button" id="saveAdd" class="btn btn-primary">Adicionar</button>
-                    <button type="button" id="cancelAdd" class="btn btn-secondary">Cancelar</button>
-                </div>
-            </form>
-        </div>
-    </div>
     {% endif %}
-
-    <!-- Script JavaScript -->
-    <script>
-        // Passar informações do usuário do Flask para o JavaScript
-        const userInfo = {
-            isAdmin: "{{ 'true' if user and user.is_admin else 'false' }}",
-            email: "{{ user.email if user else '' }}",
-            nome: "{{ user.nome if user else '' }}",
-            role: "{{ user.role if user else '' }}"
-        };
-        
-        console.log('Informações do usuário:', userInfo);
-    </script>
-    <script src="{{ url_for('static', filename='catalogo.js') }}"></script>
+     <script src="{{ url_for('static', filename='js/catalogo.js') }}"></script>
 </body>
 </html>

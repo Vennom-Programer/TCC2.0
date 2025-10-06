@@ -58,11 +58,13 @@ def popular_classificacoes():
         if result['count'] == 0:
             # Inserir classificações padrão
             classificacoes = [
-                (1, 'Equipamento Eletrônico'),
-                (2, 'Material Didático'), 
-                (3, 'Mobiliário'),
-                (4, 'Ferramenta'),
-                (5, 'Outros')
+                (1, 'Data-Show'),
+                (2, 'Caixa de Som'), 
+                (3, 'Microfone'),
+                (4, 'Notebook'),
+                (5, 'Eletrônico')
+                (6, 'Laboratório')
+                (7, 'Auditório')
             ]
             
             cursor.executemany(
@@ -92,11 +94,13 @@ def corrigir_integridade_banco():
         if cursor.fetchone()['COUNT(*)'] == 0:
             cursor.execute("""
                 INSERT INTO classificacao (id, nome) VALUES 
-                (1, 'Equipamento Eletrônico'),
-                (2, 'Material Didático'),
-                (3, 'Mobiliário'),
-                (4, 'Ferramenta'),
-                (5, 'Outros')
+                (1, 'Data-Show'),
+                (2, 'Caixa de Som'),
+                (3, 'Microfone'),
+                (4, 'Notebook'),
+                (5, 'Eletrônico'),
+                (6, 'Laboratório'),
+                (7, 'Auditório')
             """)
             print("Tabela classificacao populada")
         
@@ -696,6 +700,59 @@ def api_catalogo_itens():
     finally:
         close_cursor(cursor)
 
+
+# =============================================
+# ROTA PARA DELETAR ITEM DO CATÁLOGO
+# =============================================
+
+@app.route('/api/itens/<int:item_id>', methods=['DELETE'])
+def deletar_item(item_id):
+    """API para deletar um item do catálogo"""
+    check = require_login_or_redirect()
+    if check:
+        return jsonify({'success': False, 'error': 'Não autorizado'}), 401
+    
+    # Verificar se o usuário é administrador
+    if session.get('usuario_role') != 'adm':
+        return jsonify({'success': False, 'error': 'Apenas administradores podem excluir itens'}), 403
+    
+    cursor = None
+    try:
+        cursor = get_cursor()
+        
+        # Verificar se o item existe
+        cursor.execute("SELECT id FROM itens WHERE id = %s", (item_id,))
+        if not cursor.fetchone():
+            return jsonify({'success': False, 'error': 'Item não encontrado'}), 404
+        
+        # Verificar se existem reservas ativas para este item
+        cursor.execute("""
+            SELECT COUNT(*) as count FROM reservas 
+            WHERE id_item = %s AND status IN ('pendente', 'aprovado')
+        """, (item_id,))
+        result = cursor.fetchone()
+        
+        if result['count'] > 0:
+            return jsonify({
+                'success': False, 
+                'error': 'Não é possível excluir item com reservas ativas ou pendentes'
+            }), 400
+        
+        # Deletar o item
+        cursor.execute("DELETE FROM itens WHERE id = %s", (item_id,))
+        get_db_connection().commit()
+        
+        return jsonify({
+            'success': True, 
+            'message': 'Item excluído com sucesso'
+        })
+        
+    except mysql.connector.Error as e:
+        print(f"Erro ao excluir item: {e}")
+        return jsonify({'success': False, 'error': 'Erro interno do servidor'}), 500
+    finally:
+        close_cursor(cursor)
+
 # =============================================
 # CALENDÁRIO - CORRIGIDO
 # =============================================
@@ -1056,8 +1113,9 @@ def usuarios():
     try:
         cursor = get_cursor()
         # Buscar todos os usuários do banco de dados
-        cursor.execute("SELECT nome, email, role FROM usuarios ORDER BY nome")
+        cursor.execute("SELECT Id, nome, email, role FROM usuarios ORDER BY nome")
         usuarios = cursor.fetchall()
+        
         
         return render_template('usuarios.html', usuarios=usuarios)
         

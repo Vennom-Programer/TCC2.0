@@ -2,7 +2,7 @@
 if (typeof userInfo === 'undefined') {
     console.error('Informações do usuário não disponíveis');
     var userInfo = {
-        isAdmin: false,
+        isAdmin: true,
         email: '',
         nome: '',
         role: ''
@@ -46,7 +46,7 @@ const resourcesTable = document.getElementById('resourcesTable');
 let currentEditRow = null;
 
 // =============================================
-// NOVAS FUNÇÕES PARA CARREGAR ITENS DO BANCO
+// FUNÇÕES PARA CARREGAR ITENS DO BANCO
 // =============================================
 
 // Carregar itens do banco de dados
@@ -72,19 +72,17 @@ async function carregarItensDoBanco() {
 
 // Preencher a tabela com os itens
 function preencherTabela(itens) {
-    const tbody = resourcesTable.querySelector('tbody');
-    
-    if (!tbody) {
-        console.error('Elemento tbody não encontrado');
+    if (!resourcesTable) {
+        console.error('Elemento resourcesTable não encontrado');
         return;
     }
     
     // Limpar tabela
-    tbody.innerHTML = '';
+    resourcesTable.innerHTML = '';
     
     if (itens.length === 0) {
-        const colCount = resourcesTable.querySelector('thead tr').cells.length;
-        tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; padding: 20px;">Nenhum item cadastrado</td></tr>`;
+        const colCount = document.querySelector('thead tr').cells.length;
+        resourcesTable.innerHTML = `<tr><td colspan="${colCount}" style="text-align: center; padding: 20px;">Nenhum item cadastrado</td></tr>`;
         return;
     }
     
@@ -98,9 +96,10 @@ function preencherTabela(itens) {
                 <button class="btn btn-edit" data-id="${item.id}">Editar</button>
                 <button class="btn btn-delete" data-id="${item.id}">Excluir</button>
             </td>
-        ` : '<td class="actions">-</td>';
+        ` : '';
         
         row.innerHTML = `
+            <td>${item.id}</td>
             <td>${item.Nome || ''}</td>
             <td>${item.quantidade || 0}</td>
             <td>${item.classificacao || ''}</td>
@@ -110,7 +109,7 @@ function preencherTabela(itens) {
             ${acoes}
         `;
         
-        tbody.appendChild(row);
+        resourcesTable.appendChild(row);
     });
     
     // Adicionar eventos aos botões se for admin
@@ -120,7 +119,83 @@ function preencherTabela(itens) {
 }
 
 // =============================================
-// FUNÇÕES ORIGINAIS MODIFICADAS
+// FUNÇÃO PARA EXCLUIR ITEM VIA API
+// =============================================
+
+async function excluirItem(itemId, itemName) {
+    if (!confirm(`Tem certeza que deseja excluir o item "${itemName}"? Esta ação não pode ser desfeita.`)) {
+        return;
+    }
+
+    try {
+        console.log(`Tentando excluir item ID: ${itemId}`);
+        
+        const response = await fetch(`/api/itens/${itemId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            console.log('Item excluído com sucesso:', data.message);
+            alert('Item excluído com sucesso!');
+            
+            // Recarregar a tabela para refletir a exclusão
+            await carregarItensDoBanco();
+        } else {
+            console.error('Erro ao excluir item:', data.error);
+            alert(`Erro ao excluir item: ${data.error}`);
+        }
+    } catch (error) {
+        console.error('Erro na requisição de exclusão:', error);
+        alert('Erro de conexão ao tentar excluir item');
+    }
+}
+
+// =============================================
+// FUNÇÃO PARA ADICIONAR EVENTOS AOS BOTÕES
+// =============================================
+
+function adicionarEventosBotoes() {
+    if (!isRealAdmin) return;
+    
+    // Eventos para botões de edição
+    document.querySelectorAll('.btn-edit').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const row = this.closest('tr');
+            const cells = row.querySelectorAll('td');
+            
+            // Preencher modal de edição (se existir)
+            if (editName && editQuantity && editId && editDescription) {
+                editName.value = cells[1].textContent; // Nome está na segunda coluna
+                editQuantity.value = cells[2].textContent; // Quantidade na terceira
+                editId.value = this.getAttribute('data-id');
+                editDescription.value = cells[5].textContent; // Descrição na sexta
+                
+                currentEditRow = row;
+                if (editModal) editModal.style.display = 'flex';
+            }
+        });
+    });
+    
+    // Eventos para botões de exclusão
+    document.querySelectorAll('.btn-delete').forEach(btn => {
+        btn.addEventListener('click', async function() {
+            const row = this.closest('tr');
+            const cells = row.querySelectorAll('td');
+            const itemName = cells[1].textContent; // Nome está na segunda coluna
+            const itemId = this.getAttribute('data-id');
+            
+            await excluirItem(itemId, itemName);
+        });
+    });
+}
+
+// =============================================
+// INICIALIZAÇÃO E CONFIGURAÇÕES
 // =============================================
 
 // Inicialização baseada no tipo de usuário
@@ -141,14 +216,10 @@ async function inicializarCatalogo() {
         }
 
         adminModeBtn.addEventListener('click', () => {
-            const adminPassword = prompt("Digite a senha de administrador:");
-            if (adminPassword === "admin123") {
-                body.classList.add('admin-mode');
-                localStorage.setItem('catalogMode', 'admin');
-                alert("Modo administrador ativado!");
-            } else {
-                alert("Senha incorreta. Acesso negado.");
-            }
+            // Modo admin ativado automaticamente baseado na role do banco
+            body.classList.add('admin-mode');
+            localStorage.setItem('catalogMode', 'admin');
+            alert("Modo administrador ativado!");
         });
 
         userModeBtn.addEventListener('click', () => {
@@ -174,56 +245,65 @@ async function inicializarCatalogo() {
     if (searchInput) {
         searchInput.addEventListener('keyup', function() {
             const searchText = this.value.toLowerCase();
-            const rows = resourcesTable.querySelectorAll('tbody tr');
+            const rows = resourcesTable.querySelectorAll('tr');
             
             rows.forEach(row => {
                 const cells = row.querySelectorAll('td');
-                const name = cells[0].textContent.toLowerCase();
-                const quantity = cells[1].textContent.toLowerCase();
-                const classification = cells[2] ? cells[2].textContent.toLowerCase() : '';
-                const location = cells[3] ? cells[3].textContent.toLowerCase() : '';
-                const description = cells[4] ? cells[4].textContent.toLowerCase() : '';
-                const specs = cells[5] ? cells[5].textContent.toLowerCase() : '';
-                
-                if (name.includes(searchText) || classification.includes(searchText) || 
-                    location.includes(searchText) || description.includes(searchText) ||
-                    specs.includes(searchText) || quantity.includes(searchText)) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
+                if (cells.length > 0) {
+                    const name = cells[1].textContent.toLowerCase(); // Nome na segunda coluna
+                    const quantity = cells[2].textContent.toLowerCase(); // Quantidade na terceira
+                    const classification = cells[3] ? cells[3].textContent.toLowerCase() : '';
+                    const location = cells[4] ? cells[4].textContent.toLowerCase() : '';
+                    const description = cells[5] ? cells[5].textContent.toLowerCase() : '';
+                    const specs = cells[6] ? cells[6].textContent.toLowerCase() : '';
+                    
+                    if (name.includes(searchText) || classification.includes(searchText) || 
+                        location.includes(searchText) || description.includes(searchText) ||
+                        specs.includes(searchText) || quantity.includes(searchText)) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
                 }
             });
         });
     }
 
-    // Configurar eventos apenas para admins reais
+    // Configurar eventos baseado no tipo de usuário
     if (isRealAdmin) {
         console.log('Configurando eventos para admin');
         configurarEventosAdmin();
     } else {
         console.log('Usuário não é admin - funcionalidades limitadas');
-        // Remover coluna de ações se existir para não-admins
-        const actionHeaders = document.querySelectorAll('th.admin-only');
-        actionHeaders.forEach(header => {
-            header.style.display = 'none';
+        // Garantir que elementos admin-only estão escondidos
+        const adminElements = document.querySelectorAll('.admin-only');
+        adminElements.forEach(element => {
+            element.style.display = 'none';
         });
         
-        const actionCells = document.querySelectorAll('td.admin-only');
-        actionCells.forEach(cell => {
-            cell.style.display = 'none';
-        });
+        // Esconder controles de acesso
+        const accessControl = document.querySelector('.access-control');
+        if (accessControl) {
+            accessControl.style.display = 'none';
+        }
+        
+        // Esconder botão de adicionar recurso
+        const addResource = document.querySelector('.add-resource');
+        if (addResource) {
+            addResource.style.display = 'none';
+        }
     }
 }
 
 // Configurar eventos administrativos
 function configurarEventosAdmin() {
     // Abrir modal de adição
-    if (addResourceBtn) {
+    if (addResourceBtn && addModal) {
         addResourceBtn.addEventListener('click', () => {
             // Limpar o formulário
-            addName.value = '';
-            addQuantity.value = '1';
-            addDescription.value = '';
+            if (addName) addName.value = '';
+            if (addQuantity) addQuantity.value = '1';
+            if (addDescription) addDescription.value = '';
             
             // Exibir o modal
             addModal.style.display = 'flex';
@@ -249,7 +329,7 @@ function configurarEventosAdmin() {
         saveEditBtn.addEventListener('click', async () => {
             if (currentEditRow) {
                 try {
-                    // Aqui você implementaria a atualização no banco
+                    // TODO: Implementar chamada API para atualizar no banco
                     const itemId = editId.value;
                     const updatedData = {
                         nome: editName.value,
@@ -257,14 +337,13 @@ function configurarEventosAdmin() {
                         descricao: editDescription.value
                     };
                     
-                    // TODO: Implementar chamada API para atualizar no banco
                     console.log('Atualizando item:', itemId, updatedData);
                     
                     // Atualizar visualmente
                     const cells = currentEditRow.querySelectorAll('td');
-                    cells[0].textContent = editName.value;
-                    cells[1].textContent = editQuantity.value;
-                    cells[4].textContent = editDescription.value;
+                    cells[1].textContent = editName.value; // Nome
+                    cells[2].textContent = editQuantity.value; // Quantidade
+                    cells[5].textContent = editDescription.value; // Descrição
                     
                     alert("Recurso atualizado com sucesso!");
                     closeModal();
@@ -309,62 +388,6 @@ function configurarEventosAdmin() {
     window.addEventListener('click', (e) => {
         if (editModal && e.target === editModal) closeModal();
         if (addModal && e.target === addModal) closeModal();
-    });
-}
-
-// Função para adicionar eventos aos botões (apenas para admin)
-function adicionarEventosBotoes() {
-    if (!isRealAdmin) return;
-    
-    document.querySelectorAll('.btn-edit').forEach(btn => {
-        // Remover event listeners existentes para evitar duplicação
-        const newBtn = btn.cloneNode(true);
-        btn.parentNode.replaceChild(newBtn, btn);
-        
-        // Adicionar novo event listener
-        newBtn.addEventListener('click', function() {
-            const row = this.closest('tr');
-            const cells = row.querySelectorAll('td');
-            
-            editName.value = cells[0].textContent;
-            editQuantity.value = cells[1].textContent;
-            editId.value = this.getAttribute('data-id');
-            editDescription.value = cells[4].textContent;
-            
-            currentEditRow = row;
-            editModal.style.display = 'flex';
-        });
-    });
-    
-    document.querySelectorAll('.btn-delete').forEach(btn => {
-        // Remover event listeners existentes para evitar duplicação
-        const newBtn = btn.cloneNode(true);
-        btn.parentNode.replaceChild(newBtn, btn);
-        
-        // Adicionar novo event listener
-        newBtn.addEventListener('click', async function() {
-            const row = this.closest('tr');
-            const name = row.querySelector('td:first-child').textContent;
-            const itemId = this.getAttribute('data-id');
-            
-            if (confirm(`Tem certeza que deseja excluir o recurso "${name}"?`)) {
-                try {
-                    // TODO: Implementar chamada API para excluir do banco
-                    console.log('Excluindo item:', itemId);
-                    
-                    // Remover visualmente
-                    row.remove();
-                    
-                    // Recarregar itens se necessário
-                    await carregarItensDoBanco();
-                    
-                    alert("Recurso excluído com sucesso!");
-                } catch (error) {
-                    console.error('Erro ao excluir item:', error);
-                    alert("Erro ao excluir recurso");
-                }
-            }
-        });
     });
 }
 

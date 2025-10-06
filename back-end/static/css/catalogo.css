@@ -179,7 +179,7 @@ body {
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(to right, #0066cc, #66ccff 100%);
     color: white;
 }
 
@@ -311,7 +311,7 @@ body {
 .form-group textarea:focus,
 .form-group select:focus {
     outline: none;
-    border-color: #667eea;
+    border-color: #0066cc;
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
@@ -552,7 +552,7 @@ body:not(.admin-mode) .admin-only {
 .resources-table th {
     background-color: #f8f9fa;
     font-weight: 600;
-    color: #333;
+    color: #ffffff;
 }
 
 .resources-table tr:hover {
@@ -577,4 +577,46 @@ body:not(.admin-mode) .admin-only {
     outline: none;
     border-color: #007bff;
     box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+}
+
+/* Estilos para os botões de ação */
+.btn-delete {
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-left: 5px;
+    font-size: 14px;
+    transition: background-color 0.3s;
+}
+
+.btn-delete:hover {
+    background-color: #c82333;
+}
+
+.btn-edit {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s;
+}
+
+.btn-edit:hover {
+    background-color: #0056b3;
+}
+
+.actions {
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* Estilo para modo administrador */
+.admin-mode .admin-only {
+    display: table-cell !important;
 }
