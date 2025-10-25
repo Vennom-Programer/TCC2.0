@@ -62,8 +62,8 @@ def popular_classificacoes():
                 (2, 'Caixa de Som'), 
                 (3, 'Microfone'),
                 (4, 'Notebook'),
-                (5, 'Eletrônico')
-                (6, 'Laboratório')
+                (5, 'Eletrônico'),
+                (6, 'Laboratório'),
                 (7, 'Auditório')
             ]
             
@@ -119,7 +119,7 @@ def corrigir_integridade_banco():
                 INSERT INTO localizacao (nome) VALUES 
                 ('Laboratório de Informática'),
                 ('Auditório'),
-                ('Sala'),
+                ('Sala')
             """)
             print("Tabela localizacao populada")
         
@@ -295,7 +295,7 @@ def cadastro_post():
         if cursor.fetchone():
             return redirect('/cadastro?error=matricula_exists')
 
-        insert_query = "INSERT INTO usuarios (nome, email, senha, Id, role) VALUES (%s, %s, %s, %s, %s)"
+        insert_query = "INSERT INTO usuarios (nome, email, senha, id, role) VALUES (%s, %s, %s, %s, %s)"
         insert_values = (nome, email, senha, Id, role)
         cursor.execute(insert_query, insert_values)
         get_db_connection().commit()
@@ -344,7 +344,7 @@ def loginPost():
         # Configurar sessão do usuário
         session['usuario_logado'] = email
         session['usuario_role'] = db_role
-        session['usuario_id'] = usuario['Id']
+        session['usuario_id'] = usuario['id']
         session['usuario_nome'] = usuario['nome']
 
         print(f"Usuário {email} logou com sucesso. Role: {db_role}")  # Log para debug
