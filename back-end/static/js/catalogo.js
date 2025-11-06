@@ -2,12 +2,13 @@
 if (typeof userInfo === 'undefined') {
     console.error('Informações do usuário não disponíveis');
     var userInfo = {
-        isAdmin: true,
+        is_admin: false,
         email: '',
         nome: '',
         role: ''
     };
 }
+
 
 console.log('Inicializando catálogo para usuário:', userInfo);
 
@@ -17,7 +18,8 @@ const userModeBtn = document.getElementById('userMode');
 const body = document.body;
 
 // Verificar se usuário é admin real (do banco de dados)
-const isRealAdmin = userInfo.isAdmin;
+const isRealAdmin = userInfo.is_admin;
+
 
 // Elementos dos modais (apenas para admins)
 const editModal = isRealAdmin ? document.getElementById('editModal') : null;
@@ -329,27 +331,44 @@ function configurarEventosAdmin() {
         saveEditBtn.addEventListener('click', async () => {
             if (currentEditRow) {
                 try {
-                    // TODO: Implementar chamada API para atualizar no banco
                     const itemId = editId.value;
                     const updatedData = {
                         nome: editName.value,
                         quantidade: editQuantity.value,
                         descricao: editDescription.value
                     };
-                    
+
                     console.log('Atualizando item:', itemId, updatedData);
-                    
-                    // Atualizar visualmente
-                    const cells = currentEditRow.querySelectorAll('td');
-                    cells[1].textContent = editName.value; // Nome
-                    cells[2].textContent = editQuantity.value; // Quantidade
-                    cells[5].textContent = editDescription.value; // Descrição
-                    
-                    alert("Recurso atualizado com sucesso!");
-                    closeModal();
+
+                    // Fazer chamada API para atualizar no banco
+                    const response = await fetch(`/api/itens/${itemId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(updatedData)
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        console.log('Item atualizado com sucesso:', data.message);
+
+                        // Atualizar visualmente apenas se a API foi bem-sucedida
+                        const cells = currentEditRow.querySelectorAll('td');
+                        cells[1].textContent = editName.value; // Nome
+                        cells[2].textContent = editQuantity.value; // Quantidade
+                        cells[5].textContent = editDescription.value; // Descrição
+
+                        alert("Recurso atualizado com sucesso!");
+                        closeModal();
+                    } else {
+                        console.error('Erro ao atualizar item:', data.error);
+                        alert(`Erro ao atualizar recurso: ${data.error}`);
+                    }
                 } catch (error) {
-                    console.error('Erro ao atualizar item:', error);
-                    alert("Erro ao atualizar recurso");
+                    console.error('Erro na requisição de atualização:', error);
+                    alert("Erro de conexão ao atualizar recurso");
                 }
             }
         });

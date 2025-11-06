@@ -647,11 +647,12 @@ def catalogo():
         
         # Buscar informações do usuário logado
         usuario_info = {
-            'email': session.get('usuario_logado'),
-            'nome': session.get('usuario_nome'),
-            'role': session.get('usuario_role'),
-            'is_admin': session.get('usuario_role') == 'adm'
-        }
+        'email': session.get('usuario_logado'),
+        'nome': session.get('usuario_nome'),
+        'role': session.get('usuario_role'),
+        'is_admin': session.get('usuario_role') == 'adm'
+}
+
         
         return render_template('catalogo.html', itens=itens, user=usuario_info)
         
@@ -702,8 +703,69 @@ def api_catalogo_itens():
 
 
 # =============================================
-# ROTA PARA DELETAR ITEM DO CATÁLOGO
+# ROTAS PARA GERENCIAR ITENS DO CATÁLOGO
 # =============================================
+
+@app.route('/api/itens/<int:item_id>', methods=['PUT'])
+def editar_item(item_id):
+    """API para editar um item do catálogo"""
+    check = require_login_or_redirect()
+    if check:
+        return jsonify({'success': False, 'error': 'Não autorizado'}), 401
+
+    # Verificar se o usuário é administrador
+    if session.get('usuario_role') != 'adm':
+        return jsonify({'success': False, 'error': 'Apenas administradores podem editar itens'}), 403
+
+    try:
+        data = request.get_json()
+        nome = data.get('nome')
+        quantidade = data.get('quantidade')
+        descricao = data.get('descricao')
+
+        # Validações básicas
+        if not nome or quantidade is None:
+            return jsonify({'success': False, 'error': 'Nome e quantidade são obrigatórios'}), 400
+
+        try:
+            quantidade = int(quantidade)
+            if quantidade < 0:
+                return jsonify({'success': False, 'error': 'Quantidade não pode ser negativa'}), 400
+        except ValueError:
+            return jsonify({'success': False, 'error': 'Quantidade deve ser um número'}), 400
+
+        cursor = None
+        try:
+            cursor = get_cursor()
+
+            # Verificar se o item existe
+            cursor.execute("SELECT id FROM itens WHERE id = %s", (item_id,))
+            if not cursor.fetchone():
+                return jsonify({'success': False, 'error': 'Item não encontrado'}), 404
+
+            # Atualizar o item
+            cursor.execute("""
+                UPDATE itens
+                SET Nome = %s, quantidade = %s, descricao = %s
+                WHERE id = %s
+            """, (nome, quantidade, descricao, item_id))
+
+            get_db_connection().commit()
+
+            return jsonify({
+                'success': True,
+                'message': 'Item atualizado com sucesso'
+            })
+
+        except mysql.connector.Error as e:
+            print(f"Erro ao editar item: {e}")
+            return jsonify({'success': False, 'error': 'Erro interno do servidor'}), 500
+        finally:
+            close_cursor(cursor)
+
+    except Exception as e:
+        print(f"Erro geral ao editar item: {e}")
+        return jsonify({'success': False, 'error': 'Erro interno do servidor'}), 500
 
 @app.route('/api/itens/<int:item_id>', methods=['DELETE'])
 def deletar_item(item_id):
@@ -711,42 +773,42 @@ def deletar_item(item_id):
     check = require_login_or_redirect()
     if check:
         return jsonify({'success': False, 'error': 'Não autorizado'}), 401
-    
+
     # Verificar se o usuário é administrador
     if session.get('usuario_role') != 'adm':
         return jsonify({'success': False, 'error': 'Apenas administradores podem excluir itens'}), 403
-    
+
     cursor = None
     try:
         cursor = get_cursor()
-        
+
         # Verificar se o item existe
         cursor.execute("SELECT id FROM itens WHERE id = %s", (item_id,))
         if not cursor.fetchone():
             return jsonify({'success': False, 'error': 'Item não encontrado'}), 404
-        
+
         # Verificar se existem reservas ativas para este item
         cursor.execute("""
-            SELECT COUNT(*) as count FROM reservas 
+            SELECT COUNT(*) as count FROM reservas
             WHERE id_item = %s AND status IN ('pendente', 'aprovado')
         """, (item_id,))
         result = cursor.fetchone()
-        
+
         if result['count'] > 0:
             return jsonify({
-                'success': False, 
+                'success': False,
                 'error': 'Não é possível excluir item com reservas ativas ou pendentes'
             }), 400
-        
+
         # Deletar o item
         cursor.execute("DELETE FROM itens WHERE id = %s", (item_id,))
         get_db_connection().commit()
-        
+
         return jsonify({
-            'success': True, 
+            'success': True,
             'message': 'Item excluído com sucesso'
         })
-        
+
     except mysql.connector.Error as e:
         print(f"Erro ao excluir item: {e}")
         return jsonify({'success': False, 'error': 'Erro interno do servidor'}), 500
