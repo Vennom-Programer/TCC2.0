@@ -37,13 +37,6 @@
     </div>
     {% endif %}
     
-    <!-- Controles de acesso (apenas para admin) -->
-    {% if user and user.is_admin %}
-    <div class="access-control">
-        <button id="adminMode" class="btn btn-primary">Modo Administrador</button>
-        <button id="userMode" class="btn btn-secondary">Modo Usuário</button>
-    </div>
-    {% endif %}
 
     <!-- Barra de pesquisa -->
     <div class="search-bar">
@@ -78,7 +71,7 @@
             <td>{{ item.descricao or 'N/A' }}</td>
             <td>{{ item.especificacoestec or 'N/A' }}</td>
             {% if user and user.is_admin %}
-            <td class="actions admin-only">
+            <td class="acões para editar e excluir">
                 <button class="btn btn-edit" data-id="{{ item.id }}">Editar</button>
                 <button class="btn btn-delete" data-id="{{ item.id }}">Excluir</button>
             </td>
@@ -94,14 +87,6 @@
     {% endif %}
 </tbody>
     </table>
-
-    <!-- Botão para adicionar novo item (apenas admin) -->
-    {% if user and user.is_admin %}
-    <div class="add-resource admin-only">
-        <button id="addResource" class="btn btn-success">Adicionar Novo Item</button>
-    </div>
-    {% endif %}
-</div>
 
     <!-- Modais (apenas para admin) -->
     {% if user and user.is_admin %}
@@ -131,6 +116,6 @@
         </div>
     </div>
     {% endif %}
-     <script src="{{ url_for('static', filename='js/catalogo.js') }}"></script>
+     <script src="/static/js/catalogo.js"></script>
 </body>
 </html>
