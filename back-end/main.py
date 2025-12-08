@@ -18,7 +18,7 @@ def get_db_connection():
                 user="root",
                 password="root",
                 database="smartreserva",
-                autocommit=True
+                auth_plugin='mysql_native_password'
             )
             print("Nova conexão MySQL estabelecida")
         except mysql.connector.Error as e:
