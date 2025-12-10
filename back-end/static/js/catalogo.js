@@ -18,6 +18,7 @@ const editQuantity = document.getElementById('edit-quantity');
 const editDescription = document.getElementById('edit-description');
 const saveEditBtn = document.getElementById('saveEdit');
 const cancelEditBtn = document.getElementById('cancelEdit');
+const closeEditModal = document.getElementById('closeEditModal');
 
 // Variável para controlar a linha sendo editada
 let currentEditRow = null;
@@ -171,14 +172,14 @@ function adicionarEventosBotoesAdmin() {
             // Preencher modal de edição
             if (editId && editName && editQuantity && editDescription) {
                 editId.value = this.getAttribute('data-id');
-                editName.value = cells[1].textContent; // Nome
-                editQuantity.value = cells[2].textContent; // Quantidade
-                editDescription.value = cells[5].textContent; // Descrição
+                editName.value = cells[1].textContent.trim(); // Nome
+                editQuantity.value = cells[2].textContent.trim(); // Quantidade
+                editDescription.value = cells[5].textContent.trim(); // Descrição
 
                 currentEditRow = row;
 
                 if (editModal) {
-                    editModal.style.display = 'flex';
+                    editModal.classList.add('active');
                 }
             }
         });
@@ -188,7 +189,7 @@ function adicionarEventosBotoesAdmin() {
     document.querySelectorAll('.btn-delete').forEach(btn => {
         btn.addEventListener('click', async function() {
             const itemId = this.getAttribute('data-id');
-            const itemName = this.closest('tr').querySelectorAll('td')[1].textContent;
+            const itemName = this.closest('tr').querySelectorAll('td')[1].textContent.trim();
 
             await excluirItem(itemId, itemName);
         });
@@ -273,10 +274,21 @@ function configurarEventos() {
                     try {
                         const itemId = editId.value;
                         const updatedData = {
-                            nome: editName.value,
-                            quantidade: editQuantity.value,
-                            descricao: editDescription.value
+                            nome: editName.value.trim(),
+                            quantidade: parseInt(editQuantity.value),
+                            descricao: editDescription.value.trim()
                         };
+
+                        // Validação básica
+                        if (!updatedData.nome) {
+                            showAlert('O nome do item é obrigatório', 'error');
+                            return;
+                        }
+
+                        if (updatedData.quantidade <= 0) {
+                            showAlert('A quantidade deve ser maior que zero', 'error');
+                            return;
+                        }
 
                         console.log('Atualizando item:', itemId, updatedData);
 
@@ -295,9 +307,9 @@ function configurarEventos() {
 
                             // Atualizar visualmente
                             const cells = currentEditRow.querySelectorAll('td');
-                            cells[1].textContent = editName.value; // Nome
-                            cells[2].textContent = editQuantity.value; // Quantidade
-                            cells[5].textContent = editDescription.value; // Descrição
+                            cells[1].textContent = updatedData.nome; // Nome
+                            cells[2].textContent = updatedData.quantidade; // Quantidade
+                            cells[5].textContent = updatedData.descricao; // Descrição
 
                             showAlert('Recurso atualizado com sucesso!', 'success');
                             fecharModalEdicao();
@@ -318,6 +330,11 @@ function configurarEventos() {
             cancelEditBtn.addEventListener('click', fecharModalEdicao);
         }
 
+        // Botão fechar modal
+        if (closeEditModal) {
+            closeEditModal.addEventListener('click', fecharModalEdicao);
+        }
+
         // Fechar modal clicando fora
         window.addEventListener('click', (e) => {
             if (e.target === editModal) {
@@ -329,8 +346,11 @@ function configurarEventos() {
 
 function fecharModalEdicao() {
     if (editModal) {
-        editModal.style.display = 'none';
+        editModal.classList.remove('active');
         currentEditRow = null;
+        if (editForm) {
+            editForm.reset();
+        }
     }
 }
 

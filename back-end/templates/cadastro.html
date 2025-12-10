@@ -22,7 +22,7 @@
                 <label for="senha">Senha</label>
                 <input type="password" id="senha" name="senha" required>
             </div>
-            {% if session.get('usuario_role') and session.get('usuario_role')|lower == 'adm' %}
+            {% if session.get('usuario_role') and session.get('usuario_role')|lower == 'admin' %}
             <div class="form-group">
                 <label>Tipo de usuário</label>
                 <div class="role-options">
@@ -32,9 +32,9 @@
                 <small>O ADM pode marcar se o novo usuário também será ADM ou um Professor.</small>
             </div>
             <div class="form-group" id="admin-auth" style="display:none;">
-                <label for="admin_password">Confirme sua senha de ADM</label>
+                <label for="admin_password">Confirme sua senha de ADMIN</label>
                 <input type="password" id="admin_password" name="admin_password" placeholder="Senha do ADM para confirmar" />
-                <small>Para criar outro ADM, confirme sua própria senha.</small>
+                <small>Para criar outro ADMIN, confirme sua própria senha.</small>
             </div>
             {% endif %}
             <button class="cadastro-btn" type="submit">Cadastrar</button>

@@ -20,7 +20,7 @@
         {% endif %}
         <h1>Sistema de Agendamento</h1>
 
-            {% if session.get('usuario_role') and session.get('usuario_role')|lower == 'adm' %}
+            {% if session.get('usuario_role') and session.get('usuario_role')|lower == 'admin' %}
         <!-- Admin view -->
         <div class="menu-buttons">
             <a href="/usuarios.html" class="menu-card admin-manage">

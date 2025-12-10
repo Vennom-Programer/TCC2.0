@@ -196,7 +196,7 @@ def require_admin_or_redirect():
     db_role = get_user_role(session.get('usuario_logado'))
     if not db_role:
         db_role = session.get('usuario_role')
-    if str(db_role).strip().lower() != 'adm':
+    if str(db_role).strip().lower() != 'admin':
         return redirect('/?error=forbidden')
     return None
 
@@ -238,7 +238,7 @@ def cadastro():
         db_role = get_user_role(session.get('usuario_logado'))
         if not db_role:
             db_role = session.get('usuario_role')
-        if db_role and str(db_role).strip().lower() != 'adm':
+        if db_role and str(db_role).strip().lower() != 'admin':
             return redirect('/?error=forbidden')
     return render_template('cadastro.html')
 
@@ -255,13 +255,13 @@ def cadastro_post():
         current_role = get_user_role(session.get('usuario_logado'))
         if not current_role:
             current_role = session.get('usuario_role')
-    if session.get('usuario_logado') and current_role != 'adm':
-        return redirect('/cadastro?error=forbidden')
+    if session.get('usuario_logado') and current_role != 'admin':
+        return redirect('/cadastro?error=forbden')
 
-    if role and current_role != 'adm':
-        return redirect('/cadastro?error=forbidden')
+    if role and current_role != 'admin':
+        return redirect('/cadastro?error=forbden')
 
-    if current_role == 'adm' and role and str(role).strip().lower() == 'adm':
+    if current_role == 'admin' and role and str(role).strip().lower() == 'admin':
         admin_password = request.form.get('admin_password')
         cursor_check = None
         try:
@@ -650,7 +650,7 @@ def catalogo():
         'email': session.get('usuario_logado'),
         'nome': session.get('usuario_nome'),
         'role': session.get('usuario_role'),
-        'is_admin': session.get('usuario_role') == 'adm'
+        'is_admin': session.get('usuario_role') == 'admin'
 }
 
         
@@ -663,7 +663,7 @@ def catalogo():
             'email': session.get('usuario_logado'),
             'nome': session.get('usuario_nome'),
             'role': session.get('usuario_role'),
-            'is_admin': session.get('usuario_role') == 'adm'
+            'is_admin': session.get('usuario_role') == 'admin'
         }
         return render_template('catalogo.html', itens=[], user=usuario_info)
     finally:
@@ -714,7 +714,7 @@ def editar_item(item_id):
         return jsonify({'success': False, 'error': 'Não autorizado'}), 401
 
     # Verificar se o usuário é administrador
-    if session.get('usuario_role') != 'adm':
+    if session.get('usuario_role') != 'admin':
         return jsonify({'success': False, 'error': 'Apenas administradores podem editar itens'}), 403
 
     try:
@@ -775,7 +775,7 @@ def deletar_item(item_id):
         return jsonify({'success': False, 'error': 'Não autorizado'}), 401
 
     # Verificar se o usuário é administrador
-    if session.get('usuario_role') != 'adm':
+    if session.get('usuario_role') != 'admin':
         return jsonify({'success': False, 'error': 'Apenas administradores podem excluir itens'}), 403
 
     cursor = None
@@ -1140,7 +1140,7 @@ def cancelar_reserva(reserva_id):
             return jsonify({'success': False, 'error': 'Reserva não encontrada'}), 404
         
         usuario_atual = get_user_data(session.get('usuario_logado'))
-        is_admin = usuario_atual and usuario_atual.get('role') == 'adm'
+        is_admin = usuario_atual and usuario_atual.get('role') == 'admin'
         is_owner = reserva['email'] == session.get('usuario_logado')
         
         if not (is_admin or is_owner):

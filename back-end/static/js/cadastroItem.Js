@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', function () {
             // Formulário principal
             this.itemForm = document.getElementById('itemForm');
             this.saveBtn = document.getElementById('saveBtn');
-            this.cancelBtn = document.getElementById('cancelBtn');
+            this.backBtn = document.getElementById('backBtn');
             this.loadingIndicator = document.getElementById('loadingIndicator');
             this.successMessage = document.getElementById('successMessage');
             this.errorMessage = document.getElementById('errorMessage');
@@ -64,7 +64,7 @@ document.addEventListener('DOMContentLoaded', function () {
         attachEventListeners() {
             // Formulário principal
             this.itemForm.addEventListener('submit', (e) => this.handleItemSubmit(e));
-            this.cancelBtn.addEventListener('click', () => this.handleCancel());
+            this.backBtn.addEventListener('click', () => this.handleBack());
             
             // Categorias
             this.categoriaBtns.forEach(btn => {
@@ -425,11 +425,9 @@ async handleItemSubmit(e) {
             return true;
         }
         
-        // Cancelar cadastro
-        handleCancel() {
-            if (confirm('Deseja cancelar o cadastro? Todas as informações serão perdidas.')) {
-                window.location.href = '/index.html';
-            }
+        // Voltar para index
+        handleBack() {
+            window.location.href = '/index.html';
         }
         
         // Mostrar indicador de carregamento

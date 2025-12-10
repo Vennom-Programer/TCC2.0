@@ -88,16 +88,59 @@ body {
     font-weight: 300;
 }
 
-/* Controles de acesso */
-.access-control {
-    display: flex;
-    justify-content: center;
-    gap: 1rem;
-    margin-bottom: 2rem;
-    padding: 1rem;
-    background: white;
+/* Painel de administrador */
+.admin-panel {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 1.5rem;
     border-radius: 10px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    margin-bottom: 2rem;
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
+}
+
+.admin-controls {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    color: white;
+}
+
+.admin-controls h3 {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.2rem;
+    font-weight: 500;
+}
+
+.admin-controls .btn {
+    background: white;
+    color: #667eea;
+    font-weight: 600;
+    padding: 0.75rem 1.5rem;
+    margin: 0;
+    transition: all 0.3s ease;
+}
+
+.admin-controls .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.admin-controls .btn i {
+    margin-right: 5px;
+}
+
+@media (max-width: 768px) {
+    .admin-controls {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .admin-controls .btn {
+        width: 100%;
+        text-align: center;
+    }
 }
 
 /* Barra de pesquisa */
@@ -255,6 +298,10 @@ body {
     justify-content: center;
 }
 
+.modal.active {
+    display: flex;
+}
+
 .modal-content {
     background: white;
     padding: 2rem;
@@ -263,6 +310,22 @@ body {
     width: 90%;
     max-width: 500px;
     animation: modalSlideIn 0.3s ease-out;
+    position: relative;
+}
+
+.close-btn {
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    font-size: 28px;
+    font-weight: bold;
+    color: #aaa;
+    cursor: pointer;
+    transition: color 0.3s;
+}
+
+.close-btn:hover {
+    color: #000;
 }
 
 @keyframes modalSlideIn {
@@ -279,7 +342,9 @@ body {
 .modal-content h2 {
     margin-bottom: 1.5rem;
     color: #333;
-    text-align: center;
+    display: flex;
+    align-items: center;
+    gap: 10px;
     font-weight: 300;
 }
 
@@ -611,9 +676,25 @@ body:not(.admin-mode) .admin-only {
     background-color: #0056b3;
 }
 
-.actions {
+.admin-actions {
     text-align: center;
     white-space: nowrap;
+    display: flex;
+    gap: 5px;
+    justify-content: center;
+}
+
+.admin-actions .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin: 0;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+}
+
+.admin-actions .btn i {
+    font-size: 0.9rem;
 }
 
 /* Estilo para modo administrador */
