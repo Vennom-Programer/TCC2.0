@@ -282,18 +282,40 @@ document.addEventListener('DOMContentLoaded', function() {
   // FUNÇÕES DE INTEGRAÇÃO COM BACKEND - CORRIGIDAS
   // =============================================
   
-  // FUNÇÃO CORRIGIDA: Buscar reservas do backend
+  // FUNÇÃO CORRIGIDA: Buscar empréstimos do backend
 async function getReservationsFromBackend() {
   try {
+    console.log('📅 Buscando empréstimos do backend...');
     const response = await fetch('/api/reservas');
     if (response.ok) {
       const data = await response.json();
-      return data.reservas || {}; // Agora compatível com o backend
+      const emprestimos = data.emprestimos || {};
+      console.log('✅ Empréstimos carregados:', emprestimos);
+      
+      // Converter para formato que o sistema espera
+      const reservasFormatadas = {};
+      for (const data_key in emprestimos) {
+        console.log(`📍 Processando data: ${data_key}`);
+        for (const slot_key in emprestimos[data_key]) {
+          const emp = emprestimos[data_key][slot_key];
+          if (!reservasFormatadas[data_key]) {
+            reservasFormatadas[data_key] = {};
+          }
+          reservasFormatadas[data_key][slot_key] = {
+            ...emp,
+            reserved: true,
+            userColor: userColors[String(emp.userId)] || '#e74c3c'
+          };
+          console.log(`   - Slot ${slot_key}: ${emp.resourceName} (${emp.status})`);
+        }
+      }
+      
+      return reservasFormatadas;
     } else {
-      console.error('Erro na resposta do servidor:', response.status);
+      console.error('❌ Erro na resposta do servidor:', response.status);
     }
   } catch (error) {
-    console.error('Erro ao buscar reservas:', error);
+    console.error('❌ Erro ao buscar empréstimos:', error);
   }
   return {};
 }
@@ -419,6 +441,7 @@ async function loadModalData() {
 // FUNÇÃO CORRIGIDA: Salvar reserva no backend
 async function saveReservationToBackend(reservationData) {
     try {
+        console.log('📤 Enviando dados da reserva:', reservationData);
         const response = await fetch('/api/reservas', {
             method: 'POST',
             headers: {
@@ -428,13 +451,16 @@ async function saveReservationToBackend(reservationData) {
         });
         
         if (response.ok) {
-            return await response.json();
+            const result = await response.json();
+            console.log('✅ Reserva salva com sucesso:', result);
+            return result;
         } else {
             const errorData = await response.json();
+            console.error('❌ Erro do servidor:', errorData);
             throw new Error(errorData.error || 'Erro ao salvar reserva');
         }
     } catch (error) {
-        console.error('Erro:', error);
+        console.error('❌ Erro na requisição:', error);
         throw error;
     }
 }
@@ -502,7 +528,7 @@ async function getAvailableUsers() {
   // NOVA FUNÇÃO: Verificar se o usuário pode cancelar uma reserva
   function canUserCancelReservation(reservation) {
     // Admin pode cancelar qualquer reserva
-    if (currentUserData.role === 'adm') {
+    if (currentUserData.role === 'admin') {
       return true;
     }
     
@@ -770,7 +796,94 @@ async function getAvailableUsers() {
     return true;
   }
 
-  // NOVA FUNÇÃO: Gerar minhas reservas no modal
+  // NOVA FUNÇÃO: Exibir resumo de reservas do dia no modal
+  function showDayReservationsSummary() {
+    const summaryContainer = document.getElementById('dayReservationsSummary');
+    const summaryContent = document.getElementById('dayReservationsSummaryContent');
+    
+    if (!summaryContainer || !summaryContent) return;
+    
+    const dayReservations = currentReservations[selectedDateKey] || {};
+    const reservationsList = Object.values(dayReservations).filter(r => r.reserved);
+    
+    if (reservationsList.length === 0) {
+      summaryContainer.style.display = 'none';
+      return;
+    }
+    
+    // Agrupar por horário
+    const reservationsByTime = {};
+    let myReservationsCount = 0;
+    
+    reservationsList.forEach(reservation => {
+      const timeSlot = getTimeSlotByKey(reservation.originalSlotKey);
+      if (timeSlot) {
+        const timeKey = `${timeSlot.start}-${timeSlot.end}`;
+        if (!reservationsByTime[timeKey]) {
+          reservationsByTime[timeKey] = {
+            time: timeSlot.start,
+            display: `${timeSlot.start} às ${timeSlot.end}`,
+            reservations: []
+          };
+        }
+        reservationsByTime[timeKey].reservations.push(reservation);
+        
+        // Contar minhas reservas
+        if (String(reservation.userId) === String(currentUserData.id)) {
+          myReservationsCount++;
+        }
+      }
+    });
+    
+    // Ordenar por horário
+    const sortedTimes = Object.values(reservationsByTime).sort((a, b) => {
+      return parseInt(a.time.replace(':', '')) - parseInt(b.time.replace(':', ''));
+    });
+    
+    // Gerar conteúdo
+    let html = `<div class="summary-stats">
+      <span class="stat-item">
+        <i class="fas fa-calendar-times"></i> 
+        <strong>${reservationsList.length}</strong> reserva(s)
+      </span>`;
+    
+    if (myReservationsCount > 0) {
+      html += `<span class="stat-item my-reservations">
+        <i class="fas fa-user-check"></i> 
+        <strong>${myReservationsCount}</strong> minha(s)
+      </span>`;
+    }
+    
+    html += `</div>`;
+    
+    // Adicionar detalhes das reservas
+    html += `<div class="summary-details">`;
+    
+    sortedTimes.forEach(timeData => {
+      html += `<div class="summary-time-group">
+        <div class="summary-time"><i class="fas fa-clock"></i> ${timeData.display}</div>`;
+      
+      timeData.reservations.forEach(reservation => {
+        const isMyReservation = String(reservation.userId) === String(currentUserData.id);
+        html += `
+        <div class="summary-reservation ${isMyReservation ? 'my-reservation' : ''}">
+          <span class="summary-badge" style="background-color: ${reservation.userColor || '#e74c3c'}"></span>
+          <span class="summary-resource">${reservation.resourceName}</span>
+          <span class="summary-user">${reservation.userName || 'Usuário'}</span>
+          ${isMyReservation ? '<span class="my-badge-small">Minha</span>' : ''}
+        </div>`;
+      });
+      
+      html += `</div>`;
+    });
+    
+    html += `</div>`;
+    
+    summaryContent.innerHTML = html;
+    summaryContainer.style.display = 'block';
+  }
+
+  // NOVA FUNÇÃO MELHORADA: Gerar minhas reservas no modal COM EXIBIÇÃO NO POPUP
   async function generateMyReservations() {
     if (!myReservationsList) return;
     
@@ -823,7 +936,7 @@ async function getAvailableUsers() {
             <div class="my-reservation-time">${timeData.time}</div>
             <div class="my-reservation-resource">${reservation.resourceName}</div>
           </div>
-          <button class="cancel-reservation-btn" data-slot-key="${reservation.originalSlotKey}" ${isCancelMode ? '' : 'disabled'}>
+          <button class="cancel-reservation-btn" data-slot-key="${reservation.originalSlotKey}" data-reservation-id="${reservation.id}" ${isCancelMode ? '' : 'disabled'}>
             <i class="fas fa-times"></i> ${isCancelMode ? 'Selecionar para Cancelar' : 'Cancelar'}
           </button>
         `;
@@ -867,7 +980,7 @@ async function getAvailableUsers() {
     });
   }
   
-  // Função para mostrar o popup de reservas
+  // FUNÇÃO MELHORADA: Mostrar popup com todas as reservas do dia
   async function showReservationsPopup(dayElement, day, month, year) {
     const dateKey = getDateKey(day, month, year);
     const dayReservations = currentReservations[dateKey];
@@ -879,19 +992,22 @@ async function getAvailableUsers() {
     if (popupTitle) popupTitle.textContent = `Reservas para ${day}/${month + 1}/${year}`;
     
     if (!dayReservations || Object.keys(dayReservations).length === 0) {
-      if (popupContent) popupContent.innerHTML = '<div class="no-reservations">Nenhuma reserva para este dia</div>';
+      if (popupContent) popupContent.innerHTML = '<div class="no-reservations"><i class="fas fa-calendar-check"></i> Nenhuma reserva para este dia</div>';
     } else {
       // Agrupar reservas por horário
       const reservationsByTime = {};
+      let totalReservations = 0;
       
       Object.values(dayReservations).forEach(reservation => {
         if (reservation.reserved) {
+          totalReservations++;
           const timeSlot = getTimeSlotByKey(reservation.originalSlotKey);
           if (timeSlot) {
             const timeKey = `${timeSlot.start}-${timeSlot.end}`;
             if (!reservationsByTime[timeKey]) {
               reservationsByTime[timeKey] = {
                 time: `${timeSlot.start} às ${timeSlot.end}`,
+                number: timeSlot.number,
                 reservations: []
               };
             }
@@ -907,25 +1023,41 @@ async function getAvailableUsers() {
       
       // Criar conteúdo do popup
       if (sortedTimes.length === 0) {
-        if (popupContent) popupContent.innerHTML = '<div class="no-reservations">Nenhuma reserva para este dia</div>';
+        if (popupContent) popupContent.innerHTML = '<div class="no-reservations"><i class="fas fa-calendar-check"></i> Nenhuma reserva para este dia</div>';
       } else {
+        // Adicionar título com contagem
+        const titleElement = document.createElement('div');
+        titleElement.className = 'reservations-popup-title';
+        titleElement.innerHTML = `<i class="fas fa-list"></i> ${totalReservations} reserva(s) encontrada(s)`;
+        if (popupContent) popupContent.appendChild(titleElement);
+        
+        // Adicionar cada reserva agrupada por horário
         sortedTimes.forEach(timeKey => {
           const timeData = reservationsByTime[timeKey];
           const timeElement = document.createElement('div');
           timeElement.classList.add('reservation-item');
           
           timeElement.innerHTML = `
-            <div class="reservation-time">${timeData.time}</div>
+            <div class="reservation-time">
+              <i class="fas fa-clock"></i> 
+              <strong>Horário ${timeData.number}:</strong> ${timeData.time}
+            </div>
           `;
           
           timeData.reservations.forEach(reservation => {
+            const isMyReservation = String(reservation.userId) === String(currentUserData.id);
             const reservationElement = document.createElement('div');
-            reservationElement.classList.add('reservation-detail');
+            reservationElement.classList.add('reservation-detail', isMyReservation ? 'my-reservation' : '');
+            
             reservationElement.innerHTML = `
-              <div><strong>Recurso:</strong> ${reservation.resourceName}</div>
+              <div class="reservation-resource">
+                <i class="fas fa-box"></i> <strong>${reservation.resourceName}</strong>
+              </div>
               <div class="reservation-user">
                 <span class="user-badge" style="background-color: ${reservation.userColor || '#e74c3c'}"></span>
-                ${reservation.userName}
+                <span class="user-name">${reservation.userName || 'Usuário desconhecido'}</span>
+                ${isMyReservation ? '<span class="my-badge">Minha Reserva</span>' : ''}
+                ${!isMyReservation && currentUserData.role === 'admin' ? '<span class="admin-badge">⚙️ Admin</span>' : ''}
               </div>
             `;
             timeElement.appendChild(reservationElement);
@@ -945,12 +1077,12 @@ async function getAvailableUsers() {
       let left = rect.left + window.scrollX;
       
       // Ajustar posição se o popup ultrapassar a tela
-      if (left + 280 > window.innerWidth) {
-        left = window.innerWidth - 280;
+      if (left + 320 > window.innerWidth) {
+        left = window.innerWidth - 320 - 10;
       }
       
-      if (top + 300 > window.innerHeight) {
-        top = rect.top + window.scrollY - 300;
+      if (top + 350 > window.innerHeight) {
+        top = rect.top + window.scrollY - 350;
       }
       
       reservationsPopup.style.top = top + 'px';
@@ -961,7 +1093,7 @@ async function getAvailableUsers() {
       clearTimeout(popupTimeout);
       popupTimeout = setTimeout(() => {
         reservationsPopup.classList.remove('visible');
-      }, 5000); // Fechar após 5 segundos
+      }, 6000); // Fechar após 6 segundos
     }
   }
   
@@ -1121,15 +1253,15 @@ async function getAvailableUsers() {
     // Limpar seleções de recursos
     clearResourceSelection();
     
-    // CORREÇÃO: Garantir que as reservas estão carregadas
-    if (Object.keys(currentReservations).length === 0) {
-      currentReservations = await getReservationsFromBackend();
-    }
+    // ⭐ CORREÇÃO CRÍTICA: SEMPRE carregar as reservas mais recentes
+    console.log('📥 Carregando reservas mais recentes...');
+    currentReservations = await getReservationsFromBackend();
+    console.log('✅ Reservas carregadas antes de gerar slots:', currentReservations);
     
     // NOVO: Carregar dados do modal DO CATÁLOGO
     await loadModalData();
     
-    // Gerar os horários COM AWAIT
+    // Gerar os horários COM AWAIT (agora com reservas carregadas)
     await generateTimeSlots();
     
     // Gerar minhas reservas COM AWAIT
@@ -1236,6 +1368,9 @@ async function getAvailableUsers() {
       eveningSlots.appendChild(timeSlot);
     });
     
+    // ⭐ Exibir resumo de reservas do dia no modal
+    showDayReservationsSummary();
+    
     // Atualizar o estado dos botões
     updateButtonStates();
   }
@@ -1272,7 +1407,7 @@ async function getAvailableUsers() {
       }
       
       // Adicionar indicador visual para admin em reservas de outros usuários
-      if (!isMyReservation && currentUserData.role === 'adm') {
+      if (!isMyReservation && currentUserData.role === 'admin') {
         reservedText += ' ⚙️'; // Ícone de administrador
       }
       
@@ -1521,7 +1656,7 @@ async function getAvailableUsers() {
       
       if (userCancellableReservations.length === 0) {
         showResultModal(
-          currentUserData.role === 'adm' 
+          currentUserData.role === 'admin' 
             ? 'Não há reservas para cancelar neste dia.'
             : 'Você não tem reservas para cancelar neste dia.',
           false

@@ -296,38 +296,109 @@
     }
     
     .reservation-item {
-      padding: 8px;
-      margin-bottom: 8px;
-      background: #f9f9f9;
-      border-radius: 5px;
-      border-left: 3px solid #9b59b6;
+      padding: 10px;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, #f9f9f9 0%, #f0f0f0 100%);
+      border-radius: 6px;
+      border-left: 4px solid #9b59b6;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .reservations-popup-title {
+      padding: 8px 10px;
+      margin-bottom: 10px;
+      background: #e8f4f8;
+      border-radius: 4px;
+      font-weight: bold;
+      color: #0066cc;
+      font-size: 0.9rem;
+      text-align: center;
     }
     
     .reservation-time {
       font-weight: bold;
       color: #004080;
-      margin-bottom: 3px;
+      margin-bottom: 6px;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .reservation-time i {
+      color: #ff6b6b;
     }
     
     .reservation-detail {
       font-size: 0.85rem;
-      color: #555;
-      margin-bottom: 2px;
+      color: #333;
+      margin-bottom: 4px;
+      padding-left: 8px;
+      border-left: 2px solid #ddd;
+      padding-bottom: 4px;
+    }
+    
+    .reservation-detail.my-reservation {
+      background: #e8f5e9;
+      border-left-color: #4caf50;
+      padding: 6px 8px;
+      border-radius: 3px;
+    }
+    
+    .reservation-resource {
+      font-weight: 600;
+      color: #0066cc;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .reservation-resource i {
+      color: #2196f3;
     }
     
     .reservation-user {
       display: flex;
       align-items: center;
-      gap: 5px;
+      gap: 6px;
       font-size: 0.8rem;
-      color: #777;
+      color: #666;
+      flex-wrap: wrap;
     }
     
     .user-badge {
       display: inline-block;
-      width: 10px;
-      height: 10px;
+      width: 12px;
+      height: 12px;
       border-radius: 50%;
+      border: 1px solid #999;
+    }
+    
+    .user-name {
+      font-weight: 500;
+      color: #333;
+    }
+    
+    .my-badge {
+      display: inline-block;
+      background: #4caf50;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 0.7rem;
+      font-weight: bold;
+    }
+    
+    .admin-badge {
+      display: inline-block;
+      background: #ff9800;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 0.7rem;
+      font-weight: bold;
+    }
     }
     
     .user-badge.user1 { background-color: #e74c3c; }
@@ -392,6 +463,117 @@
     
     .close-modal:hover {
       color: #0066cc;
+    }
+    
+    /* ⭐ NOVO: Estilo para resumo de reservas do dia */
+    .day-reservations-summary {
+      background: linear-gradient(135deg, #e8f4f8 0%, #f0f8ff 100%);
+      border: 1px solid #b3dfe8;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 15px;
+    }
+    
+    .summary-header {
+      font-weight: bold;
+      color: #0066cc;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.95rem;
+    }
+    
+    .summary-stats {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+    
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: white;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      color: #333;
+      border-left: 3px solid #ff6b6b;
+    }
+    
+    .stat-item.my-reservations {
+      border-left-color: #4caf50;
+      color: #2e7d32;
+    }
+    
+    .summary-details {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    
+    .summary-time-group {
+      background: white;
+      border-radius: 4px;
+      padding: 6px 8px;
+    }
+    
+    .summary-time {
+      font-weight: 600;
+      font-size: 0.85rem;
+      color: #0066cc;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    
+    .summary-reservation {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.8rem;
+      color: #333;
+      padding: 3px 6px;
+      background: #f9f9f9;
+      border-radius: 3px;
+      margin-left: 12px;
+    }
+    
+    .summary-reservation.my-reservation {
+      background: #e8f5e9;
+      color: #1b5e20;
+    }
+    
+    .summary-badge {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    
+    .summary-resource {
+      font-weight: 500;
+      color: #0066cc;
+    }
+    
+    .summary-user {
+      color: #666;
+    }
+    
+    .my-badge-small {
+      display: inline-block;
+      background: #4caf50;
+      color: white;
+      padding: 1px 4px;
+      border-radius: 2px;
+      font-size: 0.7rem;
+      font-weight: bold;
+      margin-left: auto;
+    }
     }
     
     .resource-selection {

@@ -8,6 +8,13 @@
   <link rel="stylesheet" href="/static/css/calendario.css" />
 </head>
 <body>
+  <!-- Dados do usuário atual (passados pelo servidor) -->
+  <div id="user-data" 
+       data-id="{{ session.get('usuario_id', '1') }}" 
+       data-nome="{{ session.get('usuario_nome', 'Usuário') }}" 
+       data-email="{{ session.get('usuario_logado', 'user@example.com') }}" 
+       data-role="{{ session.get('usuario_role', 'professor') }}" 
+       style="display:none;"></div>
   <div class="calendar-container" role="application" aria-label="Calendário de disponibilidade de recursos">
     <header>
       <a href="/index.html" class="back-button"><i class="fas fa-arrow-left"></i> Voltar</a>
@@ -25,6 +32,15 @@
         </div>
         
         <div style="display:flex; gap:8px; align-items:center;">
+          {% if session.get('usuario_role') and session.get('usuario_role')|lower == 'admin' %}
+          <label for="userSelector" style="font-weight: bold;">Visualizar como:</label>
+          <select id="userSelector" style="padding: 5px 10px; border-radius: 4px; border: 1px solid #ddd;">
+            <option value="">Você (Admin)</option>
+            {% for user in usuarios %}
+            <option value="{{ user['Id'] }}">{{ user['nome'] }} ({{ user['role'] }})</option>
+            {% endfor %}
+          </select>
+          {% endif %}
         </div>
         
       </div>
@@ -92,6 +108,16 @@
       <div class="modal-header">
         <h2 id="modalTitle">Horários para <span id="selectedDate"></span></h2>
         <button class="close-modal" id="closeModal">&times;</button>
+      </div>
+      
+      <!-- ⭐ NOVA SEÇÃO: Resumo de reservas do dia -->
+      <div class="day-reservations-summary" id="dayReservationsSummary" style="display: none;">
+        <div class="summary-header">
+          <i class="fas fa-info-circle"></i> Reservas deste dia
+        </div>
+        <div class="summary-content" id="dayReservationsSummaryContent">
+          <!-- Será preenchido pelo JavaScript -->
+        </div>
       </div>
       
       <div class="resource-selection">
@@ -165,6 +191,12 @@
       </div>
     </div>
   </div>
+  
+  <!-- Passar dados dos usuários para JavaScript (apenas se admin) -->
+  <script>
+    window.__USERS__ = {{ usuarios|tojson }};
+  </script>
+  
   <script src="/static/js/calendario.js"></script>
 </body>
 </html>
