@@ -17,9 +17,14 @@
             <div class="nav-user">
                 {% if user %}
                 <span>Bem-vindo, <strong>{{ user.nome }}</strong></span>
-                <span class="user-role">({{ user.role }})</span>
+                <span class="user-role {% if user.role == 'admin' %}admin-badge{% else %}professor-badge{% endif %}">
+                    {% if user.role == 'admin' %}
+                    <i class="fas fa-shield-alt"></i> Administrador
+                    {% else %}
+                    <i class="fas fa-chalkboard-user"></i> Professor
+                    {% endif %}
+                </span>
                 <a href="/index.html" class="btn-home">Início</a>
-                <a href="{{ url_for('logout') }}" class="btn-logout">Sair</a>
                 {% endif %}
             </div>
         </div>
@@ -38,7 +43,7 @@
     {% endif %}
     
     <!-- Painel de controle do admin -->
-    {% if user and user.is_admin %}
+    {% if user and user.role == 'admin' %}
     <div class="admin-panel">
         <div class="admin-controls">
             <h3><i class="fas fa-user-shield"></i> Painel de Administrador</h3>
@@ -47,6 +52,15 @@
             </a>
         </div>
     </div>
+    {% else %}
+    {% if user and user.role == 'professor' %}
+    <div class="user-panel">
+        <div class="user-info">
+            <i class="fas fa-info-circle"></i>
+            <span>Você está visualizando o catálogo como <strong>Professor</strong>. Apenas administradores podem editar e excluir itens.</span>
+        </div>
+    </div>
+    {% endif %}
     {% endif %}
 
     <!-- Barra de pesquisa -->
@@ -83,10 +97,10 @@
             <td>{{ item.especificacoestec or 'N/A' }}</td>
             {% if user and user.is_admin %}
             <td class="admin-actions">
-                <button class="btn btn-edit" data-id="{{ item.id }}" title="Editar item">
+                <button class="btn btn-primary" data-action="edit" data-id="{{ item.id }}" title="Editar item">
                     <i class="fas fa-edit"></i> Editar
                 </button>
-                <button class="btn btn-delete" data-id="{{ item.id }}" title="Excluir item">
+                <button class="btn btn-danger" data-action="delete" data-id="{{ item.id }}" title="Excluir item">
                     <i class="fas fa-trash"></i> Excluir
                 </button>
             </td>
@@ -103,9 +117,7 @@
 </tbody>
     </table>
 
-    <!-- Modais (apenas para admin) -->
-    {% if user and user.is_admin %}
-    <!-- Modal de Edição -->
+    <!-- Modal de Edição (renderizado sempre, visibilidade controlada via JS) -->
     <div id="editModal" class="modal">
         <div class="modal-content">
             <span class="close-btn" id="closeEditModal">&times;</span>
@@ -135,7 +147,7 @@
             </form>
         </div>
     </div>
-    {% endif %}
-     <script src="/static/js/catalogo.js"></script>
+
+    <script src="/static/js/catalogo.js"></script>
 </body>
 </html>

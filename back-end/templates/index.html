@@ -13,7 +13,7 @@
     <div class="container">
         {% if session.get('usuario_logado') %}
         <div class="top-actions" style="text-align:right; margin-bottom:10px;">
-                {% if session.get('usuario_role') and session.get('usuario_role')|lower == 'adm' %}
+                {% if session.get('usuario_role') and session.get('usuario_role')|lower == 'admin' %}
             {% endif %}
             <a href="/logout" class="logout-button">Sair</a>
         </div>

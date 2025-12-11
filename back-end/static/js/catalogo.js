@@ -20,6 +20,11 @@ const saveEditBtn = document.getElementById('saveEdit');
 const cancelEditBtn = document.getElementById('cancelEdit');
 const closeEditModal = document.getElementById('closeEditModal');
 
+// Debug: verificar se elementos foram encontrados
+console.log('Modal encontrado:', editModal);
+console.log('EditForm encontrado:', editForm);
+console.log('closeEditModal encontrado:', closeEditModal);
+
 // Variável para controlar a linha sendo editada
 let currentEditRow = null;
 
@@ -72,9 +77,18 @@ async function carregarInformacoesUsuario() {
                 email: data.email,
                 nome: data.nome,
                 role: data.role,
-                is_admin: data.role === 'adm'
+                id: data.id,
+                is_admin: data.is_admin || (data.role && data.role.trim().toLowerCase() === 'admin')
             };
             console.log('Informações do usuário carregadas:', userInfo);
+            console.log('Tipo de usuário:', userInfo.is_admin ? 'Administrador (admin)' : 'Professor');
+            console.log('Role no banco:', userInfo.role);
+            // Aplicar classe no body para exibir colunas/ações de admin no CSS
+            try {
+                document.body.classList.toggle('admin-mode', !!userInfo.is_admin);
+            } catch (e) {
+                console.warn('Não foi possível aplicar classe admin-mode no body:', e);
+            }
         } else {
             console.log('Usuário não logado');
             userInfo = null;
@@ -130,9 +144,13 @@ function preencherTabela(itens) {
 
         // Coluna Ações apenas para admin
         const acoes = isAdmin() ? `
-            <td class="admin-only">
-                <button class="btn btn-edit" data-id="${item.id}">Editar</button>
-                <button class="btn btn-delete" data-id="${item.id}">Excluir</button>
+            <td class="admin-only admin-actions">
+                <button class="btn btn-primary" data-action="edit" data-id="${item.id}" title="Editar item">
+                    <i class="fas fa-edit"></i> Editar
+                </button>
+                <button class="btn btn-danger" data-action="delete" data-id="${item.id}" title="Excluir item">
+                    <i class="fas fa-trash"></i> Excluir
+                </button>
             </td>
         ` : '';
 
@@ -152,7 +170,10 @@ function preencherTabela(itens) {
 
     // Adicionar eventos aos botões se for admin
     if (isAdmin()) {
+        console.log('👤 Usuário é admin, adicionando eventos aos botões...');
         adicionarEventosBotoesAdmin();
+    } else {
+        console.log('🔒 Usuário NÃO é admin, botões de ação não serão interativos');
     }
 }
 
@@ -163,9 +184,15 @@ function preencherTabela(itens) {
 function adicionarEventosBotoesAdmin() {
     if (!isAdmin()) return;
 
-    // Eventos para botões de edição
-    document.querySelectorAll('.btn-edit').forEach(btn => {
+    console.log('Adicionando eventos aos botões admin...');
+
+    // Eventos para botões de edição (seleciona por data-action)
+    const editBtns = document.querySelectorAll('button[data-action="edit"]');
+    console.log('Botões de edição encontrados:', editBtns.length);
+
+    editBtns.forEach(btn => {
         btn.addEventListener('click', function() {
+            console.log('Botão editar clicado!', this);
             const row = this.closest('tr');
             const cells = row.querySelectorAll('td');
 
@@ -179,14 +206,18 @@ function adicionarEventosBotoesAdmin() {
                 currentEditRow = row;
 
                 if (editModal) {
+                    console.log('Abrindo modal...');
                     editModal.classList.add('active');
                 }
             }
         });
     });
 
-    // Eventos para botões de exclusão
-    document.querySelectorAll('.btn-delete').forEach(btn => {
+    // Eventos para botões de exclusão (seleciona por data-action)
+    const deleteBtns = document.querySelectorAll('button[data-action="delete"]');
+    console.log('Botões de exclusão encontrados:', deleteBtns.length);
+
+    deleteBtns.forEach(btn => {
         btn.addEventListener('click', async function() {
             const itemId = this.getAttribute('data-id');
             const itemName = this.closest('tr').querySelectorAll('td')[1].textContent.trim();
@@ -197,12 +228,24 @@ function adicionarEventosBotoesAdmin() {
 }
 
 async function excluirItem(itemId, itemName) {
-    if (!confirm(`Tem certeza que deseja excluir o item "${itemName}"? Esta ação não pode ser desfeita.`)) {
+    console.log('🗑️ Tentativa de exclusão - Verificando permissões...', { isAdmin: isAdmin(), userInfo });
+
+    // Verificação de segurança - validar permissão de admin
+    if (!isAdmin()) {
+        showAlert('⛔ Você não tem permissão para excluir itens. Apenas administradores podem fazer isso.', 'error');
+        console.warn('Tentativa de exclusão por usuário não-admin:', userInfo);
+        return;
+    }
+
+    console.log('✅ Permissão de admin verificada. Prosseguindo com exclusão...');
+
+    if (!confirm(`🗑️ Tem certeza que deseja excluir o item "${itemName}"?\n\nEsta ação não pode ser desfeita!`)) {
+        console.log('❌ Exclusão cancelada pelo usuário');
         return;
     }
 
     try {
-        console.log(`Tentando excluir item ID: ${itemId}`);
+        console.log(`🔄 Excluindo: ID=${itemId} | Nome="${itemName}" | Usuário=${userInfo.nome} (${userInfo.role})`);
 
         const response = await fetch(`/api/itens/${itemId}`, {
             method: 'DELETE',
@@ -214,14 +257,16 @@ async function excluirItem(itemId, itemName) {
         const data = await response.json();
 
         if (data.success) {
-            console.log('Item excluído com sucesso:', data.message);
-            showAlert('Item excluído com sucesso!', 'success');
+            console.log('✅ Item excluído com sucesso:', data.message);
+            showAlert(data.message || 'Item excluído com sucesso!', 'success');
 
-            // Recarregar a tabela
-            await carregarItensDoCatalogo();
+            // Recarregar a tabela após 1 segundo para visualizar a mudança
+            setTimeout(() => {
+                carregarItensDoCatalogo();
+            }, 500);
         } else {
-            console.error('Erro ao excluir item:', data.error);
-            showAlert(`Erro ao excluir item: ${data.error}`, 'error');
+            console.error('❌ Erro ao excluir item:', data.error);
+            showAlert(`Erro ao excluir: ${data.error}`, 'error');
         }
     } catch (error) {
         console.error('Erro na requisição de exclusão:', error);
@@ -266,11 +311,20 @@ function configurarEventos() {
     }
 
     // Eventos do modal de edição (apenas para admin)
-    if (isAdmin() && editModal) {
+    if (editModal) {
         // Botão salvar edição
         if (saveEditBtn) {
             saveEditBtn.addEventListener('click', async () => {
+                // Verificação de segurança - validar permissão de admin ANTES de fazer qualquer coisa
+                if (!isAdmin()) {
+                    showAlert('⛔ Você não tem permissão para editar itens. Apenas administradores podem fazer isso.', 'error');
+                    console.warn('Tentativa de edição por usuário não-admin:', userInfo);
+                    fecharModalEdicao();
+                    return;
+                }
+
                 if (currentEditRow) {
+
                     try {
                         const itemId = editId.value;
                         const updatedData = {
@@ -290,7 +344,7 @@ function configurarEventos() {
                             return;
                         }
 
-                        console.log('Atualizando item:', itemId, updatedData);
+                        console.log('📝 Atualizando item:', { id: itemId, nome: updatedData.nome, quantidade: updatedData.quantidade, usuario: userInfo.nome, role: userInfo.role });
 
                         const response = await fetch(`/api/itens/${itemId}`, {
                             method: 'PUT',
@@ -303,7 +357,8 @@ function configurarEventos() {
                         const data = await response.json();
 
                         if (data.success) {
-                            console.log('Item atualizado com sucesso:', data.message);
+                            console.log('✅ Item atualizado com sucesso:', data.message);
+                            showAlert(data.message || 'Item atualizado com sucesso!', 'success');
 
                             // Atualizar visualmente
                             const cells = currentEditRow.querySelectorAll('td');
@@ -311,11 +366,10 @@ function configurarEventos() {
                             cells[2].textContent = updatedData.quantidade; // Quantidade
                             cells[5].textContent = updatedData.descricao; // Descrição
 
-                            showAlert('Recurso atualizado com sucesso!', 'success');
                             fecharModalEdicao();
                         } else {
-                            console.error('Erro ao atualizar item:', data.error);
-                            showAlert(`Erro ao atualizar recurso: ${data.error}`, 'error');
+                            console.error('❌ Erro ao atualizar item:', data.error);
+                            showAlert(`Erro ao atualizar: ${data.error}`, 'error');
                         }
                     } catch (error) {
                         console.error('Erro na requisição de atualização:', error);
