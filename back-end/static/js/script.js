@@ -4,26 +4,42 @@ document.addEventListener('DOMContentLoaded', function () {
     const arquivosBtn = document.querySelector('.menu-button.arquivos');
     const catalogoBtn = document.querySelector('.menu-button.catalogo');
 
-    laboratorioBtn.addEventListener('click', function (e) {
-        e.preventDefault();
-        localStorage.setItem('tipoReserva', 'laboratorio');
-        window.location.href = '/calendario.html';
-    });
+    if (laboratorioBtn) {
+        laboratorioBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            localStorage.setItem('tipoReserva', 'laboratorio');
+            window.location.href = '/calendario.html';
+        });
+    } else {
+        console.warn('Elemento .menu-button.laboratorio não encontrado.');
+    }
 
-    auditorioBtn.addEventListener('click', function (e) {
-        e.preventDefault();
-        localStorage.setItem('tipoReserva', 'auditorio');
-        window.location.href = '/calendario.html';
-    });
+    if (auditorioBtn) {
+        auditorioBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            localStorage.setItem('tipoReserva', 'auditorio');
+            window.location.href = '/calendario.html';
+        });
+    } else {
+        console.warn('Elemento .menu-button.auditorio não encontrado.');
+    }
 
-    arquivosBtn.addEventListener('click', function (e) {
-        e.preventDefault();
-        localStorage.setItem('tipoReserva', 'arquivos');
-        window.location.href = '/calendario.html';
-    });
+    if (arquivosBtn) {
+        arquivosBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            localStorage.setItem('tipoReserva', 'arquivos');
+            window.location.href = '/calendario.html';
+        });
+    } else {
+        console.warn('Elemento .menu-button.arquivos não encontrado.');
+    }
 
-    catalogoBtn.addEventListener('click', function (e) {
-        e.preventDefault();
-        window.location.href = '/catalogo.html';
-    });
+    if (catalogoBtn) {
+        catalogoBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            window.location.href = '/catalogo.html';
+        });
+    } else {
+        console.warn('Elemento .menu-button.catalogo não encontrado.');
+    }
 });

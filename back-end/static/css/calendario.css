@@ -399,7 +399,7 @@
       font-size: 0.7rem;
       font-weight: bold;
     }
-    }
+    
     
     .user-badge.user1 { background-color: #e74c3c; }
     .user-badge.user2 { background-color: #3498db; }
@@ -574,7 +574,7 @@
       font-weight: bold;
       margin-left: auto;
     }
-    }
+    
     
     .resource-selection {
       margin-bottom: 20px;

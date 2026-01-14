@@ -864,16 +864,25 @@ def calendario():
         """)
         itens = cursor_itens.fetchall()
         
-        # Buscar reservas existentes
+       # Buscar reservas existentes
         cursor_reservas = get_cursor()
         cursor_reservas.execute("""
-            SELECT r.id, r.id_item, i.Nome as item_nome, r.data_inicio, r.data_fim, 
-                   r.hora_inicio, r.hora_fim, r.status, u.nome as usuario_nome
+            SELECT 
+                r.id,
+                r.id_itens,
+                r.id_usuario,
+                r.data_reserva,
+                r.hora_inicio,
+                r.hora_fim,
+                r.status,
+                i.nome AS item_nome,
+                u.nome AS usuario_nome
             FROM reservas r
-            JOIN itens i ON r.id_item = i.id
-            JOIN usuarios u ON r.id_usuario = u.Id
-            ORDER BY r.data_inicio, r.hora_inicio
-        """)
+            JOIN itens i ON r.id_itens = i.id
+            JOIN usuarios u ON r.id_usuario = u.id
+            ORDER BY r.data_reserva, r.hora_inicio
+            """)
+
         reservas = cursor_reservas.fetchall()
         
         # Buscar todos os usuários (para admin selecionar)

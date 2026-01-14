@@ -193,9 +193,16 @@
   </div>
   
   <!-- Passar dados dos usuários para JavaScript (apenas se admin) -->
-  <script>
-    window.__USERS__ = {{ usuarios|tojson }};
-  </script>
+  <script id="users-data" type="application/json">
+    {{ usuarios | tojson }}
+</script>
+
+<script>
+    const USERS = JSON.parse(
+        document.getElementById("users-data").textContent
+    );
+</script>
+
   
   <script src="/static/js/calendario.js"></script>
 </body>
