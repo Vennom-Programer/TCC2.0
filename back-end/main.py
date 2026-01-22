@@ -4,7 +4,8 @@ from datetime import datetime
 import threading
 
 app = Flask(__name__)
-app.secret_key = 'sua_chave_secreta_aqui'
+app.secret_key = 'chave_segura_flask_2025_smartreserva'
+
 
 # Thread-local storage para conexões do banco
 thread_local = threading.local()
@@ -62,8 +63,8 @@ def popular_classificacoes():
                 (2, 'Caixa de Som'), 
                 (3, 'Microfone'),
                 (4, 'Notebook'),
-                (5, 'Eletrônico')
-                (6, 'Laboratório')
+                (5, 'Eletrônico'),
+                (6, 'Laboratório'),
                 (7, 'Auditório')
             ]
             
@@ -119,7 +120,7 @@ def corrigir_integridade_banco():
                 INSERT INTO localizacao (nome) VALUES 
                 ('Laboratório de Informática'),
                 ('Auditório'),
-                ('Sala'),
+                ('Sala')
             """)
             print("Tabela localizacao populada")
         
@@ -320,50 +321,54 @@ def loginPost():
     email = request.form.get('email')
     senha = request.form.get('password')
     role = request.form.get('role')
-    
+
     cursor = None
     try:
         cursor = get_cursor()
-        
-        # Buscar usuário pelo email e senha
+
+        # Buscar usuário pelo email e senha exata
         cursor.execute("SELECT * FROM usuarios WHERE email = %s AND senha = %s", (email, senha))
         usuario = cursor.fetchone()
-        
+
+        # Se não encontrou usuário, exibe erro
         if not usuario:
+            print(f"[LOGIN] Falha - Usuário ou senha incorretos para email: {email}")
             return render_template('login.html', error="Email ou senha incorretos")
 
-        db_role = usuario['role']
+        db_role = str(usuario['role']).strip().lower() if usuario['role'] else ''
 
-        # Verificar se o role selecionado corresponde ao role no banco
+        # Verificar se o tipo selecionado (ADM/Professor) confere com o tipo no banco
         if role:
-            if not db_role:
-                return render_template('login.html', error="Verificação de função indisponível no servidor. Contate o administrador.")
-            if role.strip().lower() != str(db_role).strip().lower():
+            if db_role == '':
+                return render_template('login.html', error="Erro no servidor: função de usuário não definida.")
+            if role.strip().lower() != db_role:
+                print(f"[LOGIN] Falha - Tipo incorreto. Esperado: {db_role}, recebido: {role}")
                 return render_template('login.html', error="Você escolheu o tipo de usuário errado.")
 
-        # Configurar sessão do usuário
+        # Criar sessão do usuário
         session['usuario_logado'] = email
         session['usuario_role'] = db_role
-        session['usuario_id'] = usuario['Id']
+        session['usuario_id'] = usuario['id']
         session['usuario_nome'] = usuario['nome']
 
-        print(f"Usuário {email} logou com sucesso. Role: {db_role}")  # Log para debug
+        print(f"[LOGIN] Usuário '{email}' logou com sucesso como '{db_role}'.")
 
-        # Redirecionar para a página index
-        return redirect(url_for('index'))
-        
+        # Redirecionar corretamente
+        return redirect('/index.html')
+
     except Exception as e:
-        print(f"Erro no login: {e}")
-        return render_template('login.html', error="Erro ao verificar credenciais. Tente novamente mais tarde.")
+        print(f"[ERRO LOGIN] {e}")
+        return render_template('login.html', error="Erro interno ao fazer login. Tente novamente mais tarde.")
     finally:
         close_cursor(cursor)
+
 
 @app.route('/index.html')
 def index():
     check = require_login_or_redirect()
     if check:
         return check
-    return render_template('index.html')
+    return render_template('/index.html')
 
 # =============================================
 # NOVA ROTA: VOLTAR PARA INDEX
@@ -372,7 +377,7 @@ def index():
 @app.route('/voltar_index')
 def voltar_index():
     """Rota para voltar para a página index"""
-    return redirect(url_for('index'))
+    return redirect(url_for('index.html'))
 
 # =============================================
 # CADASTRO DE ITENS - CORRIGIDO
@@ -981,78 +986,71 @@ def api_reservas():
 
 @app.route('/api/reservas', methods=['POST'])
 def criar_reserva():
-    """Criar uma nova reserva - formato compatível com frontend"""
-    check = require_login_or_redirect()
-    if check:
-        return jsonify({'success': False, 'error': 'Não autorizado'}), 401
-    
+    cursor = None
     try:
+        # Recebe os dados JSON do front-end
         data = request.get_json()
-        recurso_id = data.get('recurso')
-        data_reserva = data.get('data_reserva')
-        horario = data.get('horario')
+
+        if not data:
+            return jsonify({"success": False, "error": "Nenhum dado recebido"}), 400
+
         id_usuario = data.get('id_usuario')
-        resource_name = data.get('resource_name', '')
-        
-        # Validar dados
-        if not all([recurso_id, data_reserva, horario]):
-            return jsonify({'success': False, 'error': 'Dados incompletos'}), 400
-        
-        # Buscar usuário atual se id_usuario não foi fornecido
-        if not id_usuario:
-            usuario = get_user_data(session.get('usuario_logado'))
-            if not usuario:
-                return jsonify({'success': False, 'error': 'Usuário não encontrado'}), 400
-            id_usuario = usuario['Id']
-        
-        # Parse do horário (formato: "HH:MM às HH:MM")
-        try:
-            hora_inicio, hora_fim = horario.split(' às ')
-        except ValueError:
-            return jsonify({'success': False, 'error': 'Formato de horário inválido'}), 400
-        
-        # Verificar conflitos de reserva
-        cursor_check = None
-        cursor_insert = None
-        try:
-            cursor_check = get_cursor()
-            cursor_check.execute("""
-                SELECT 1 FROM reservas 
-                WHERE id_item = %s AND status IN ('pendente', 'aprovado')
-                AND data_inicio = %s
-                AND (
-                    (hora_inicio BETWEEN %s AND %s OR hora_fim BETWEEN %s AND %s)
-                    OR (%s BETWEEN hora_inicio AND hora_fim OR %s BETWEEN hora_inicio AND hora_fim)
-                )
-            """, (recurso_id, data_reserva, 
-                  hora_inicio, hora_fim, hora_inicio, hora_fim,
-                  hora_inicio, hora_fim))
-            
-            if cursor_check.fetchone():
-                return jsonify({'success': False, 'error': 'Conflito de horário com reserva existente'}), 400
-            
-            # Inserir reserva
-            cursor_insert = get_cursor()
-            cursor_insert.execute("""
-                INSERT INTO reservas (id_item, id_usuario, data_inicio, data_fim, 
-                                    hora_inicio, hora_fim, observacao, status)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, 'pendente')
-            """, (recurso_id, id_usuario, data_reserva, data_reserva, 
-                  hora_inicio, hora_fim, data.get('observacao', '')))
-            
-            get_db_connection().commit()
-            return jsonify({'success': True, 'message': 'Reserva criada com sucesso'})
-            
-        except mysql.connector.Error as e:
-            print(f"Erro ao criar reserva: {e}")
-            return jsonify({'success': False, 'error': 'Erro ao criar reserva'}), 500
-        finally:
-            close_cursor(cursor_check)
-            close_cursor(cursor_insert)
-            
+        id_item = data.get('id_item')
+        data_reserva = data.get('data')
+        horario = data.get('horario')
+
+        # Validação básica
+        if not all([id_usuario, id_item, data_reserva, horario]):
+            return jsonify({"success": False, "error": "Dados incompletos para reserva"}), 400
+
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        # Verifica se já existe reserva no mesmo horário
+        cursor.execute("""
+            SELECT id FROM reservas
+            WHERE id_item = %s AND data = %s AND horario = %s
+        """, (id_item, data_reserva, horario))
+        existente = cursor.fetchone()
+
+        if existente:
+            return jsonify({
+                "success": False,
+                "error": "Horário já reservado para este recurso."
+            }), 409
+
+        # Insere a nova reserva
+        cursor.execute("""
+            INSERT INTO reservas (id_usuario, id_item, data, horario)
+            VALUES (%s, %s, %s, %s)
+        """, (id_usuario, id_item, data_reserva, horario))
+
+        conn.commit()
+        reserva_id = cursor.lastrowid
+
+        # Monta o objeto que o JS espera receber
+        nova_reserva = {
+            "id": reserva_id,
+            "userId": id_usuario,
+            "resourceId": id_item,
+            "data": data_reserva,
+            "horario": horario,
+            "reserved": True
+        }
+
+        print(f"[RESERVA] Usuário {id_usuario} reservou item {id_item} em {data_reserva} às {horario}")
+
+        return jsonify({"success": True, "reserva": nova_reserva}), 201
+
+    except mysql.connector.Error as e:
+        print(f"[ERRO MYSQL] {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
     except Exception as e:
-        print(f"Erro geral ao criar reserva: {e}")
-        return jsonify({'success': False, 'error': 'Erro interno do servidor'}), 500
+        print(f"[ERRO GERAL] {e}")
+        return jsonify({"success": False, "error": "Erro interno ao criar reserva."}), 500
+    finally:
+        close_cursor(cursor)
+
 
 @app.route('/api/reservas/<int:reserva_id>', methods=['DELETE'])
 def cancelar_reserva(reserva_id):
