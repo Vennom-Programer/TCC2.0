@@ -42,10 +42,27 @@ body {
 
 .user-role {
     background: rgba(255,255,255,0.2);
-    padding: 0.25rem 0.5rem;
+    padding: 0.35rem 0.75rem;
     border-radius: 20px;
-    font-size: 0.8rem;
+    font-size: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: 500;
 }
+
+.user-role.admin-badge {
+    background: linear-gradient(135deg, rgba(255,215,0,0.3) 0%, rgba(255,165,0,0.3) 100%);
+    border: 1px solid rgba(255,215,0,0.5);
+    color: #fff8dc;
+}
+
+.user-role.professor-badge {
+    background: linear-gradient(135deg, rgba(100,200,255,0.3) 0%, rgba(100,150,255,0.3) 100%);
+    border: 1px solid rgba(100,200,255,0.5);
+    color: #e8f4ff;
+}
+
 
 .btn-home {
     background: rgba(255,255,255,0.2);
@@ -57,17 +74,7 @@ body {
     transition: all 0.3s ease;
 }
 
-.btn-logout {
-    background: rgba(255,255,255,0.2);
-    color: white;
-    border: 1px solid rgba(255,255,255,0.3);
-    padding: 0.5rem 1rem;
-    border-radius: 5px;
-    text-decoration: none;
-    transition: all 0.3s ease;
-}
-
-.btn-logout:hover {
+.btn-home:hover {
     background: rgba(255,255,255,0.3);
     transform: translateY(-1px);
 }
@@ -88,16 +95,91 @@ body {
     font-weight: 300;
 }
 
-/* Controles de acesso */
-.access-control {
-    display: flex;
-    justify-content: center;
-    gap: 1rem;
-    margin-bottom: 2rem;
-    padding: 1rem;
-    background: white;
+/* Painel de administrador */
+.admin-panel {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 1.5rem;
     border-radius: 10px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    margin-bottom: 2rem;
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
+}
+
+.admin-controls {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    color: white;
+}
+
+.admin-controls h3 {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.2rem;
+    font-weight: 500;
+}
+
+.admin-controls .btn {
+    background: white;
+    color: #667eea;
+    font-weight: 600;
+    padding: 0.75rem 1.5rem;
+    margin: 0;
+    transition: all 0.3s ease;
+}
+
+.admin-controls .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.admin-controls .btn i {
+    margin-right: 5px;
+}
+
+/* Painel de usuário comum */
+.user-panel {
+    background: linear-gradient(135deg, rgba(100, 200, 255, 0.1) 0%, rgba(100, 150, 255, 0.1) 100%);
+    padding: 1.25rem;
+    border-radius: 10px;
+    margin-bottom: 2rem;
+    border-left: 4px solid #0066cc;
+    box-shadow: 0 2px 10px rgba(0, 102, 204, 0.1);
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #0066cc;
+    font-weight: 500;
+}
+
+.user-info i {
+    font-size: 1.3rem;
+    flex-shrink: 0;
+}
+
+.user-info span {
+    line-height: 1.5;
+}
+
+@media (max-width: 768px) {
+    .admin-controls {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .admin-controls .btn {
+        width: 100%;
+        text-align: center;
+    }
+
+    .user-info {
+        flex-direction: column;
+        align-items: flex-start;
+    }
 }
 
 /* Barra de pesquisa */
@@ -178,6 +260,12 @@ body {
     text-align: center;
 }
 
+.btn-primary1 {
+    background: linear-gradient(to right, #0066cc, #66ccff 100%);
+    color: white;
+    margin-bottom: 2.5%;
+}
+
 .btn-primary {
     background: linear-gradient(to right, #0066cc, #66ccff 100%);
     color: white;
@@ -208,25 +296,43 @@ body {
     box-shadow: 0 5px 15px rgba(76, 175, 80, 0.4);
 }
 
-.btn-edit {
-    background: #ffc107;
-    color: #212529;
-    margin-right: 0.5rem;
+/* Action buttons: use global `.btn` with modifiers `.btn-primary` (editar) and `.btn-danger` (excluir) */
+.btn-danger {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    color: #fff;
+    border: none;
+    padding: 0.45rem 0.7rem;
+    border-radius: 0.375rem;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+.btn-danger:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.12);
+}
+.btn-danger:focus {
+    outline: 3px solid rgba(220,53,69,0.16);
+    outline-offset: 2px;
 }
 
-.btn-edit:hover {
-    background: #e0a800;
-    transform: translateY(-1px);
+/* Ensure consistent sizing inside action cells */
+.admin-actions .btn {
+    padding: 0.35rem 0.6rem;
+    font-size: 0.9rem;
+    min-width: 36px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
-.btn-delete {
-    background: #dc3545;
-    color: white;
-}
-
-.btn-delete:hover {
-    background: #c82333;
-    transform: translateY(-1px);
+/* Icon sizing inside action buttons */
+.admin-actions .btn i,
+.admin-actions .btn svg {
+    width: 1rem;
+    height: 1rem;
 }
 
 /* Botão adicionar recurso */
@@ -255,6 +361,10 @@ body {
     justify-content: center;
 }
 
+.modal.active {
+    display: flex;
+}
+
 .modal-content {
     background: white;
     padding: 2rem;
@@ -263,6 +373,22 @@ body {
     width: 90%;
     max-width: 500px;
     animation: modalSlideIn 0.3s ease-out;
+    position: relative;
+}
+
+.close-btn {
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    font-size: 28px;
+    font-weight: bold;
+    color: #aaa;
+    cursor: pointer;
+    transition: color 0.3s;
+}
+
+.close-btn:hover {
+    color: #000;
 }
 
 @keyframes modalSlideIn {
@@ -279,7 +405,9 @@ body {
 .modal-content h2 {
     margin-bottom: 1.5rem;
     color: #333;
-    text-align: center;
+    display: flex;
+    align-items: center;
+    gap: 10px;
     font-weight: 300;
 }
 
@@ -399,7 +527,7 @@ body:not(.admin-mode) .admin-only {
         gap: 0.5rem;
     }
     
-    .btn-edit, .btn-delete {
+    .admin-actions .btn {
         margin-right: 0;
     }
 }
@@ -529,94 +657,4 @@ body:not(.admin-mode) .admin-only {
 
 .alert-error {
     background-color: #f8d7da;
-    color: #721c24;
-    border: 1px solid #f5c6cb;
-}
-
-/* Melhorar aparência da tabela */
-.resources-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 20px;
-    background-color: white;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
-
-.resources-table th,
-.resources-table td {
-    padding: 12px 15px;
-    text-align: left;
-    border-bottom: 1px solid #e0e0e0;
-}
-
-.resources-table th {
-    background-color: #f8f9fa;
-    font-weight: 600;
-    color: #ffffff;
-}
-
-.resources-table tr:hover {
-    background-color: #f5f5f5;
-}
-
-/* Estilo para a barra de pesquisa */
-.search-bar {
-    margin-bottom: 20px;
-}
-
-.search-bar input {
-    width: 100%;
-    max-width: 400px;
-    padding: 10px 15px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 14px;
-}
-
-.search-bar input:focus {
-    outline: none;
-    border-color: #007bff;
-    box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
-}
-
-/* Estilos para os botões de ação */
-.btn-delete {
-    background-color: #dc3545;
-    color: white;
-    border: none;
-    padding: 6px 12px;
-    border-radius: 4px;
-    cursor: pointer;
-    margin-left: 5px;
-    font-size: 14px;
-    transition: background-color 0.3s;
-}
-
-.btn-delete:hover {
-    background-color: #c82333;
-}
-
-.btn-edit {
-    background-color: #007bff;
-    color: white;
-    border: none;
-    padding: 6px 12px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: background-color 0.3s;
-}
-
-.btn-edit:hover {
-    background-color: #0056b3;
-}
-
-.actions {
-    text-align: center;
-    white-space: nowrap;
-}
-
-/* Estilo para modo administrador */
-.admin-mode .admin-only {
-    display: table-cell !important;
 }
