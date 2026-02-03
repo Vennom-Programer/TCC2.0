@@ -1075,6 +1075,7 @@ def api_reservas():
         cursor.execute("""
             SELECT e.id, i.Nome as resourceName, i.id as resourceId,
                    e.data_reserva, e.data_realizacao_reserva,
+                   e.hora_inicio, e.hora_fim,
                    u.Id as userId, u.nome as userName,
                    e.status
             FROM emprestimo e
@@ -1085,6 +1086,29 @@ def api_reservas():
         """)
         reservas_db = cursor.fetchall()
         
+        # Definir horários padrão (mesmo do frontend)
+        schedules = {
+            '1': {'start': '07:30', 'end': '08:20'},
+            '2': {'start': '08:20', 'end': '09:10'},
+            '3': {'start': '09:40', 'end': '10:20'},
+            '4': {'start': '10:20', 'end': '11:10'},
+            '5': {'start': '11:10', 'end': '12:00'},
+            '6': {'start': '13:30', 'end': '14:20'},
+            '7': {'start': '14:20', 'end': '15:00'},
+            '8': {'start': '15:30', 'end': '16:10'},
+            '9': {'start': '16:10', 'end': '17:00'},
+            '10': {'start': '19:30', 'end': '20:20'},
+            '11': {'start': '20:20', 'end': '21:10'},
+            '12': {'start': '21:10', 'end': '22:00'}
+        }
+        
+        def find_slot_key(hora_inicio):
+            """Encontrar o número do slot baseado na hora de início"""
+            for slot_key, schedule in schedules.items():
+                if schedule['start'] == hora_inicio:
+                    return slot_key
+            return None
+        
         # Converter para formato esperado pelo frontend
         reservas_formatadas = {}
         
@@ -1094,7 +1118,12 @@ def api_reservas():
             if data_key not in reservas_formatadas:
                 reservas_formatadas[data_key] = {}
             
-            # Gerar chave única para o empréstimo
+            # Encontrar o slot key baseado na hora de início
+            slot_key = find_slot_key(reserva['hora_inicio'])
+            
+            # Usar slot_key como originalSlotKey (ex: '1', '2', etc)
+            original_slot_key = slot_key if slot_key else f"{reserva['resourceId']}_{reserva['id']}"
+            
             reserva_key = f"{reserva['resourceId']}_{reserva['id']}"
             
             reservas_formatadas[data_key][reserva_key] = {
@@ -1107,7 +1136,9 @@ def api_reservas():
                 'data_realizacao_reserva': data_key,
                 'status': reserva['status'],
                 'reserved': True,
-                'originalSlotKey': reserva_key
+                'originalSlotKey': original_slot_key,
+                'hora_inicio': reserva['hora_inicio'],
+                'hora_fim': reserva['hora_fim']
             }
         
         return jsonify({

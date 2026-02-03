@@ -1328,6 +1328,8 @@ async function getAvailableUsers() {
     
     // Gerar horários da manhã
     morningSchedule.forEach(slot => {
+      const dayReservations = currentReservations[selectedDateKey] || {};
+      // Procurar qualquer reserva que tenha este slot key como originalSlotKey
       const reservation = Object.values(dayReservations).find(r => r.originalSlotKey === slot.key);
       const isReserved = reservation && reservation.reserved;
       const isMyReservation = isReserved && String(reservation.userId) === String(currentUserData.id);
@@ -1345,6 +1347,8 @@ async function getAvailableUsers() {
     
     // Gerar horários da tarde
     afternoonSchedule.forEach(slot => {
+      const dayReservations = currentReservations[selectedDateKey] || {};
+      // Procurar qualquer reserva que tenha este slot key como originalSlotKey
       const reservation = Object.values(dayReservations).find(r => r.originalSlotKey === slot.key);
       const isReserved = reservation && reservation.reserved;
       const isMyReservation = isReserved && String(reservation.userId) === String(currentUserData.id);
@@ -1362,6 +1366,8 @@ async function getAvailableUsers() {
     
     // Gerar horários da noite
     eveningSchedule.forEach(slot => {
+      const dayReservations = currentReservations[selectedDateKey] || {};
+      // Procurar qualquer reserva que tenha este slot key como originalSlotKey
       const reservation = Object.values(dayReservations).find(r => r.originalSlotKey === slot.key);
       const isReserved = reservation && reservation.reserved;
       const isMyReservation = isReserved && String(reservation.userId) === String(currentUserData.id);
