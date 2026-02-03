@@ -856,7 +856,7 @@ def calendario():
         return check
     
     cursor_itens = None
-    cursor_reservas = None
+    cursor_emprestimo = None
     cursor_usuarios = None
     try:
         # Buscar itens disponíveis para reserva
@@ -869,26 +869,26 @@ def calendario():
         """)
         itens = cursor_itens.fetchall()
         
-       # Buscar reservas existentes
-        cursor_reservas = get_cursor()
-        cursor_reservas.execute("""
+        # Buscar reservas existentes da tabela emprestimo
+        cursor_emprestimo = get_cursor()
+        cursor_emprestimo.execute("""
             SELECT 
-                r.id,
-                r.id_itens,
-                r.id_usuario,
-                r.data_reserva,
-                r.hora_inicio,
-                r.hora_fim,
-                r.status,
-                i.nome AS item_nome,
+                e.id,
+                e.id_itens,
+                e.id_usuario,
+                e.data_reserva,
+                e.hora_inicio,
+                e.hora_fim,
+                e.status,
+                i.Nome AS item_nome,
                 u.nome AS usuario_nome
-            FROM reservas r
-            JOIN itens i ON r.id_itens = i.id
-            JOIN usuarios u ON r.id_usuario = u.id
-            ORDER BY r.data_reserva, r.hora_inicio
+            FROM emprestimo e
+            JOIN itens i ON e.id_itens = i.id
+            JOIN usuarios u ON e.id_usuario = u.id
+            ORDER BY e.data_reserva, e.hora_inicio
             """)
 
-        reservas = cursor_reservas.fetchall()
+        reservas = cursor_emprestimo.fetchall()
         
         # Buscar todos os usuários (para admin selecionar)
         usuarios = []
@@ -903,7 +903,7 @@ def calendario():
         return render_template('calendario.html', itens=[], reservas=[], usuarios=[])
     finally:
         close_cursor(cursor_itens)
-        close_cursor(cursor_reservas)
+        close_cursor(cursor_emprestimo)
         close_cursor(cursor_usuarios)
 
 # =============================================
@@ -1136,8 +1136,11 @@ def criar_reserva():
         id_usuario = data.get('id_usuario')
         resource_name = data.get('resource_name', '')
         
+        print(f"\n[POST /api/reservas] Dados recebidos: recurso={recurso_id}, data={data_reserva}, horario={horario}, id_usuario={id_usuario}")
+        
         # Validar dados
         if not all([recurso_id, data_reserva, horario]):
+            print(f"[POST /api/reservas] Erro: Dados incompletos")
             return jsonify({'success': False, 'error': 'Dados incompletos'}), 400
         
         # Buscar usuário atual se id_usuario não foi fornecido
@@ -1150,6 +1153,7 @@ def criar_reserva():
         # Parse do horário (formato: "HH:MM às HH:MM")
         try:
             hora_inicio, hora_fim = horario.split(' às ')
+            print(f"[POST /api/reservas] Horários: início={hora_inicio}, fim={hora_fim}")
         except ValueError:
             return jsonify({'success': False, 'error': 'Formato de horário inválido'}), 400
         
@@ -1158,10 +1162,11 @@ def criar_reserva():
         cursor_insert = None
         try:
             cursor_check = get_cursor()
+            print(f"[POST /api/reservas] Verificando conflitos de horário...")
             cursor_check.execute("""
-                SELECT 1 FROM reservas 
-                WHERE id_item = %s AND status IN ('pendente', 'aprovado')
-                AND data_inicio = %s
+                SELECT 1 FROM emprestimo 
+                WHERE id_itens = %s AND status IN ('em uso', 'reservado')
+                AND data_reserva = %s
                 AND (
                     (hora_inicio BETWEEN %s AND %s OR hora_fim BETWEEN %s AND %s)
                     OR (%s BETWEEN hora_inicio AND hora_fim OR %s BETWEEN hora_inicio AND hora_fim)
@@ -1171,29 +1176,37 @@ def criar_reserva():
                   hora_inicio, hora_fim))
             
             if cursor_check.fetchone():
+                print(f"[POST /api/reservas] Conflito de horário detectado")
                 return jsonify({'success': False, 'error': 'Conflito de horário com reserva existente'}), 400
             
             # Inserir reserva
             cursor_insert = get_cursor()
+            data_realizacao = datetime.now().strftime('%Y-%m-%d')
+            print(f"[POST /api/reservas] Inserindo reserva: id_itens={recurso_id}, id_usuario={id_usuario}, data={data_reserva}, inicio={hora_inicio}, fim={hora_fim}, data_realizacao={data_realizacao}")
             cursor_insert.execute("""
-                INSERT INTO reservas (id_item, id_usuario, data_inicio, data_fim, 
-                                    hora_inicio, hora_fim, observacao, status)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, 'pendente')
-            """, (recurso_id, id_usuario, data_reserva, data_reserva, 
-                  hora_inicio, hora_fim, data.get('observacao', '')))
+                INSERT INTO emprestimo (id_itens, id_usuario, data_reserva, 
+                                    hora_inicio, hora_fim, status, data_realizacao_reserva)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (recurso_id, id_usuario, data_reserva, 
+                  hora_inicio, hora_fim, 'reservado', data_realizacao))
             
             get_db_connection().commit()
+            print(f"[POST /api/reservas] ✅ Reserva criada com sucesso")
             return jsonify({'success': True, 'message': 'Reserva criada com sucesso'})
             
         except mysql.connector.Error as e:
-            print(f"Erro ao criar reserva: {e}")
-            return jsonify({'success': False, 'error': 'Erro ao criar reserva'}), 500
+            print(f"[POST /api/reservas] ❌ Erro MySQL: {str(e)}")
+            print(f"[POST /api/reservas] Erro details: {e.msg}")
+            get_db_connection().rollback()
+            return jsonify({'success': False, 'error': f'Erro: {e.msg}'}), 500
         finally:
             close_cursor(cursor_check)
             close_cursor(cursor_insert)
             
     except Exception as e:
-        print(f"Erro geral ao criar reserva: {e}")
+        print(f"[POST /api/reservas] ❌ Erro geral: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': 'Erro interno do servidor'}), 500
 
 @app.route('/api/reservas/<int:reserva_id>', methods=['DELETE'])

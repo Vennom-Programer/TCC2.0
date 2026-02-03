@@ -234,26 +234,35 @@ document.addEventListener('DOMContentLoaded', function() {
       }
   }
 
-  // FUNÇÃO DE DEBUG ATUALIZADA: Verificar estado dos elementos e dados do catálogo
-  function debugResourceSelection() {
-      console.log('=== DEBUG RESOURCE SELECTION ===');
-      console.log('selectedResourceType:', selectedResourceType);
-      console.log('selectedResource:', selectedResource);
-      console.log('equipmentSelect options:', equipmentSelect ? equipmentSelect.options.length : 'N/A');
-      console.log('spaceSelect options:', spaceSelect ? spaceSelect.options.length : 'N/A');
-      console.log('resourceNames (do catálogo):', resourceNames);
-      console.log('availableItems (do catálogo):', availableItems);
-      
-      // Verificar dados específicos do catálogo
-      if (equipmentSelect && equipmentSelect.options.length > 0) {
-          console.log('Primeiro equipamento:', equipmentSelect.options[1]?.textContent);
-      }
-      if (spaceSelect && spaceSelect.options.length > 0) {
-          console.log('Primeiro espaço:', spaceSelect.options[1]?.textContent);
-      }
-      
-      console.log('================================');
-  }
+// FUNÇÃO DE DEBUG ATUALIZADA: Verificar estado dos elementos e dados do catálogo
+function debugResourceSelection() {
+    console.log('=== DEBUG RESOURCE SELECTION ===');
+    console.log('selectedResourceType:', selectedResourceType);
+    console.log('selectedResource:', selectedResource);
+    console.log('equipmentSelect options:', equipmentSelect ? equipmentSelect.options.length : 'N/A');
+    console.log('spaceSelect options:', spaceSelect ? spaceSelect.options.length : 'N/A');
+    console.log('resourceNames (do catálogo):', resourceNames);
+    console.log('availableItems (do catálogo):', availableItems);
+    
+// ===== CORREÇÃO CRÍTICA: garantir seleção real do recurso =====
+    if (equipmentSelect) {
+      equipmentSelect.addEventListener('change', (e) => {
+        selectedResource = e.target.value || null;
+        console.log('Equipamento selecionado:', selectedResource);
+        updateButtonStates();
+      });
+    }
+
+    if (spaceSelect) {
+      spaceSelect.addEventListener('change', (e) => {
+        selectedResource = e.target.value || null;
+        console.log('Espaço selecionado:', selectedResource);
+        updateButtonStates();
+      });
+    }
+    
+    console.log('================================');
+}
 
   // NOVA FUNÇÃO: Carregar dados quando o modal abre
   async function loadModalData() {
@@ -1541,7 +1550,7 @@ async function getAvailableUsers() {
   // =============================================
   
   // CORREÇÃO MELHORADA: Selecionar tipo de recurso - CARREGAR ITENS DO CATÁLOGO
-  if (resourceOptions) {
+    if (resourceOptions) {
     resourceOptions.forEach(option => {
       option.addEventListener('click', async function() {
         const type = this.dataset.type;
