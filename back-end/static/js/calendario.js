@@ -295,38 +295,58 @@ function debugResourceSelection() {
 async function getReservationsFromBackend() {
   try {
     console.log('📅 Buscando empréstimos do backend...');
-    const response = await fetch('/api/reservas');
-    if (response.ok) {
-      const data = await response.json();
-      const emprestimos = data.emprestimos || {};
-      console.log('✅ Empréstimos carregados:', emprestimos);
-      
-      // Converter para formato que o sistema espera
-      const reservasFormatadas = {};
-      for (const data_key in emprestimos) {
-        console.log(`📍 Processando data: ${data_key}`);
-        for (const slot_key in emprestimos[data_key]) {
-          const emp = emprestimos[data_key][slot_key];
-          if (!reservasFormatadas[data_key]) {
-            reservasFormatadas[data_key] = {};
-          }
-          reservasFormatadas[data_key][slot_key] = {
-            ...emp,
-            reserved: true,
-            userColor: userColors[String(emp.userId)] || '#e74c3c'
-          };
-          console.log(`   - Slot ${slot_key}: ${emp.resourceName} (${emp.status})`);
-        }
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
+    const response = await fetch('/api/emprestimo', {
+      signal: controller.signal,
+      headers: {
+        'Accept': 'application/json'
       }
-      
-      return reservasFormatadas;
-    } else {
-      console.error('❌ Erro na resposta do servidor:', response.status);
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
+    
+    const data = await response.json();
+    
+    if (!data || typeof data !== 'object') {
+      throw new Error('Resposta inválida do servidor');
+    }
+    
+    // Converter para formato que o sistema espera
+    const reservasFormatadas = {};
+    const emprestimo = data.emprestimos || {}; // CORREÇÃO: usar data.emprestimos
+    
+    for (const data_key in emprestimo) {
+      console.log(`📍 Processando data: ${data_key}`);
+      for (const slot_key in emprestimo[data_key]) {
+        const emp = emprestimo[data_key][slot_key];
+        if (!reservasFormatadas[data_key]) {
+          reservasFormatadas[data_key] = {};
+        }
+        reservasFormatadas[data_key][slot_key] = {
+          ...emp,
+          reserved: true,
+          userColor: userColors[String(emp.userId)] || '#e74c3c'
+        };
+        console.log(`   - Slot ${slot_key}: ${emp.resourceName} (${emp.status})`);
+      }
+    }
+    
+    return reservasFormatadas;
   } catch (error) {
-    console.error('❌ Erro ao buscar empréstimos:', error);
+    if (error.name === 'AbortError') {
+      console.error('❌ Timeout ao buscar empréstimos (>10s)');
+    } else {
+      console.error('❌ Erro ao buscar empréstimos:', error.message);
+    }
+    return {};
   }
-  return {};
 }
 
 // FUNÇÃO CORRIGIDA: Carregar itens do catálogo classificando por tipo
@@ -451,7 +471,7 @@ async function loadModalData() {
 async function saveReservationToBackend(reservationData) {
     try {
         console.log('📤 Enviando dados da reserva:', reservationData);
-        const response = await fetch('/api/reservas', {
+        const response = await fetch('/api/emprestimo', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -477,7 +497,7 @@ async function saveReservationToBackend(reservationData) {
 // FUNÇÃO CORRIGIDA: Cancelar reserva no backend
 async function cancelReservationInBackend(reservationId) {
     try {
-        const response = await fetch(`/api/reservas/${reservationId}`, {
+        const response = await fetch(`/api/emprestimo/${reservationId}`, {
             method: 'DELETE'
         });
         
@@ -916,7 +936,7 @@ async function getAvailableUsers() {
     myReservations.forEach(reservation => {
       const timeSlot = getTimeSlotByKey(reservation.originalSlotKey);
       if (timeSlot) {
-        const timeKey = `${timeSlot.start}-${timeSlot.end}`;
+        const timeKey = `${timeSlot.start} às ${timeSlot.end}`;
         if (!myReservationsByTime[timeKey]) {
           myReservationsByTime[timeKey] = {
             time: `${timeSlot.start} às ${timeSlot.end}`,

@@ -1062,9 +1062,9 @@ def api_usuario_atual():
 # CORREÇÃO DA ROTA DE RESERVAS EXISTENTE
 # =============================================
 
-@app.route('/api/reservas', methods=['GET'])
-def api_reservas():
-    """API para retornar reservas em formato compatível com o frontend"""
+@app.route('/api/emprestimo', methods=['GET', 'POST'])
+def api_emprestimo():
+    """API para retornar e criar empréstimos"""
     check = require_login_or_redirect()
     if check:
         return jsonify({'error': 'Não autorizado'}), 401
@@ -1072,85 +1072,136 @@ def api_reservas():
     cursor = None
     try:
         cursor = get_cursor()
-        cursor.execute("""
-            SELECT e.id, i.Nome as resourceName, i.id as resourceId,
-                   e.data_reserva, e.data_realizacao_reserva,
-                   e.hora_inicio, e.hora_fim,
-                   u.Id as userId, u.nome as userName,
-                   e.status
-            FROM emprestimo e
-            JOIN itens i ON e.id_itens = i.id
-            JOIN usuarios u ON e.id_usuario = u.Id
-            WHERE e.status IN ('reservado', 'em uso')
-            ORDER BY e.data_realizacao_reserva
-        """)
-        reservas_db = cursor.fetchall()
         
-        # Definir horários padrão (mesmo do frontend)
-        schedules = {
-            '1': {'start': '07:30', 'end': '08:20'},
-            '2': {'start': '08:20', 'end': '09:10'},
-            '3': {'start': '09:40', 'end': '10:20'},
-            '4': {'start': '10:20', 'end': '11:10'},
-            '5': {'start': '11:10', 'end': '12:00'},
-            '6': {'start': '13:30', 'end': '14:20'},
-            '7': {'start': '14:20', 'end': '15:00'},
-            '8': {'start': '15:30', 'end': '16:10'},
-            '9': {'start': '16:10', 'end': '17:00'},
-            '10': {'start': '19:30', 'end': '20:20'},
-            '11': {'start': '20:20', 'end': '21:10'},
-            '12': {'start': '21:10', 'end': '22:00'}
-        }
-        
-        def find_slot_key(hora_inicio):
-            """Encontrar o número do slot baseado na hora de início"""
-            for slot_key, schedule in schedules.items():
-                if schedule['start'] == hora_inicio:
-                    return slot_key
-            return None
-        
-        # Converter para formato esperado pelo frontend
-        reservas_formatadas = {}
-        
-        for reserva in reservas_db:
-            data_key = reserva['data_realizacao_reserva'].strftime('%Y-%m-%d') if isinstance(reserva['data_realizacao_reserva'], datetime) else reserva['data_realizacao_reserva']
+        # ===== GET: Retorna empréstimos existentes =====
+        if request.method == 'GET':
+            cursor.execute("""
+                SELECT 
+                    id,
+                    id_itens,
+                    id_usuario,
+                    data_reserva,
+                    hora_inicio,
+                    hora_fim,
+                    status
+                FROM emprestimo
+                WHERE status != 'cancelado'
+                ORDER BY data_reserva DESC
+            """)
             
-            if data_key not in reservas_formatadas:
-                reservas_formatadas[data_key] = {}
+            emprestimos_list = cursor.fetchall()
+            emprestimos_dict = {}
             
-            # Encontrar o slot key baseado na hora de início
-            slot_key = find_slot_key(reserva['hora_inicio'])
+            for emp in emprestimos_list:
+                try:
+                    # Validar se data_reserva não é None
+                    if emp['data_reserva'] is None:
+                        print(f"⚠️ Aviso: Empréstimo {emp['id']} com data_reserva NULL - pulando")
+                        continue
+                    
+                    # Converter data para string com formato correto
+                    if hasattr(emp['data_reserva'], 'strftime'):
+                        data_key = emp['data_reserva'].strftime('%Y-%m-%d')
+                    else:
+                        data_key = str(emp['data_reserva'])
+                    
+                    if data_key not in emprestimos_dict:
+                        emprestimos_dict[data_key] = {}
+                    
+                    # Converter hora_inicio para string
+                    if hasattr(emp['hora_inicio'], 'strftime'):
+                        hora_inicio_str = emp['hora_inicio'].strftime('%H:%M')
+                    else:
+                        hora_inicio_str = str(emp['hora_inicio'])[:5]  # Pega só HH:MM
+                    
+                    # Converter hora_fim para string
+                    if hasattr(emp['hora_fim'], 'strftime'):
+                        hora_fim_str = emp['hora_fim'].strftime('%H:%M')
+                    else:
+                        hora_fim_str = str(emp['hora_fim'])[:5]  # Pega só HH:MM
+                    
+                    slot_key = f"{hora_inicio_str}-{hora_fim_str}"
+                    
+                    emprestimos_dict[data_key][slot_key] = {
+                        'id': emp['id'],
+                        'resourceId': emp['id_itens'],
+                        'userId': emp['id_usuario'],
+                        'status': emp['status'],
+                        'startTime': hora_inicio_str,
+                        'endTime': hora_fim_str
+                    }
+                    
+                    print(f"✅ Processado: {data_key} {slot_key}")
+                    
+                except Exception as e:
+                    print(f"❌ Erro ao processar empréstimo {emp.get('id')}: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+                    continue
             
-            # Usar slot_key como originalSlotKey (ex: '1', '2', etc)
-            original_slot_key = slot_key if slot_key else f"{reserva['resourceId']}_{reserva['id']}"
-            
-            reserva_key = f"{reserva['resourceId']}_{reserva['id']}"
-            
-            reservas_formatadas[data_key][reserva_key] = {
-                'id': reserva['id'],
-                'resourceName': reserva['resourceName'],
-                'resourceId': reserva['resourceId'],
-                'userId': reserva['userId'],
-                'userName': reserva['userName'],
-                'data_reserva': reserva['data_reserva'].strftime('%Y-%m-%d') if isinstance(reserva['data_reserva'], datetime) else reserva['data_reserva'],
-                'data_realizacao_reserva': data_key,
-                'status': reserva['status'],
-                'reserved': True,
-                'originalSlotKey': original_slot_key,
-                'hora_inicio': reserva['hora_inicio'],
-                'hora_fim': reserva['hora_fim']
-            }
+            print(f"✅ Retornando {len(emprestimos_dict)} datas com empréstimos")
+            return jsonify({'emprestimos': emprestimos_dict}), 200
         
-        return jsonify({
-            'success': True,
-            'emprestimos': reservas_formatadas
-        })
-        
+        # ===== POST: Criar novo empréstimo =====
+        elif request.method == 'POST':
+            data = request.get_json()
+            
+            required_fields = ['id_itens', 'data_reserva', 'hora_inicio', 'hora_fim']
+            if not all(field in data for field in required_fields):
+                return jsonify({'error': 'Campos obrigatórios faltando'}), 400
+            
+            id_usuario = session.get('usuario_id')
+            
+            cursor.execute("""
+                SELECT COUNT(*) as count FROM emprestimo
+                WHERE id_itens = %s 
+                AND data_reserva = %s
+                AND status != 'cancelado'
+                AND (
+                    (hora_inicio < %s AND hora_fim > %s) OR
+                    (hora_inicio < %s AND hora_fim > %s)
+                )
+            """, (
+                data['id_itens'],
+                data['data_reserva'],
+                data['hora_fim'],
+                data['hora_inicio'],
+                data['hora_fim'],
+                data['hora_inicio']
+            ))
+            
+            conflict = cursor.fetchone()
+            if conflict and conflict['count'] > 0:
+                return jsonify({'error': 'Horário já reservado'}), 409
+            
+            cursor.execute("""
+                INSERT INTO emprestimo (id_itens, id_usuario, data_reserva, hora_inicio, hora_fim, status)
+                VALUES (%s, %s, %s, %s, %s, 'ativo')
+            """, (
+                data['id_itens'],
+                id_usuario,
+                data['data_reserva'],
+                data['hora_inicio'],
+                data['hora_fim']
+            ))
+            
+            get_db_connection().commit()
+            
+            return jsonify({
+                'success': True,
+                'id': cursor.lastrowid,
+                'message': 'Reserva criada com sucesso'
+            }), 201
+    
     except Exception as e:
-        print(f"Erro ao buscar reservas: {e}")
-        return jsonify({'error': 'Erro interno do servidor'}), 500
+        print(f"❌ Erro em /api/emprestimo: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    
     finally:
-        close_cursor(cursor)
+        if cursor:
+            close_cursor(cursor)
 
 @app.route('/api/reservas', methods=['POST'])
 def criar_reserva():
