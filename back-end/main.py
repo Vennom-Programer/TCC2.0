@@ -1,5 +1,5 @@
-from flask import Flask, render_template, request, redirect, session, url_for, jsonify
-import mysql.connector
+from flask import Flask, render_template, request, redirect, session, url_for, jsonify # type: ignore
+import mysql.connector # type: ignore
 from datetime import datetime
 import threading
 
