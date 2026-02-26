@@ -1,4 +1,5 @@
 {
     "workbench.colorTheme": "Default Dark Modern",
-    "CodeGPT.apiKey": "OpenAI"
+    "CodeGPT.apiKey": "OpenAI",
+    "python-envs.defaultEnvManager": "ms-python.python:system"
 }
