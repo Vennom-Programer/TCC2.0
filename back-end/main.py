@@ -1175,15 +1175,11 @@ def api_emprestimo():
                 return jsonify({'error': 'Horário já reservado'}), 409
             
             cursor.execute("""
-                INSERT INTO emprestimo (id_itens, id_usuario, data_reserva, hora_inicio, hora_fim, status)
-                VALUES (%s, %s, %s, %s, %s, 'ativo')
-            """, (
-                data['id_itens'],
-                id_usuario,
-                data['data_reserva'],
-                data['hora_inicio'],
-                data['hora_fim']
-            ))
+                INSERT INTO emprestimo (id_itens, id_usuario, data_reserva, 
+                                    hora_inicio, hora_fim, status, data_realizacao_reserva)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (data['id_itens'], id_usuario, data['data_reserva'], 
+                  data['hora_inicio'], data['hora_fim'], 'ativo', data['data_realizacao_reserva']))
             
             get_db_connection().commit()
             
