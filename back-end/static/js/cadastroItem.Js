@@ -410,13 +410,13 @@ async handleItemSubmit(e) {
                 if (categoria === 'equipamento') {
                     const tipoInt = parseInt(this.selectEquipamento.value);
                     if (tipoInt === 3) {
-                        this.showFieldError('item-type-equipamento', 'Equipamentos não podem ser do tipo Mobiliário. Selecione outro tipo.');
+                        this.showFieldError('item-type-equipamento', 'Selecione o tipo de equipamento abaixo. Selecione outro tipo.');
                         return false;
                     }
                 } else if (categoria === 'espaco') {
                     const tipoInt = parseInt(this.selectEspaco.value);
                     if (tipoInt !== 3 && tipoInt !== 5) {
-                        this.showFieldError('item-type-espaco', 'Espaços devem ser do tipo Mobiliário ou Outros.');
+                        this.showFieldError('item-type-espaco', 'Selecione o tipo de espaço abaixo. Selecione outro tipo.');
                         return false;
                     }
                 }

@@ -16,7 +16,7 @@ def get_db_connection():
         try:
             thread_local.db_connection = mysql.connector.connect(
                 host="localhost",
-                user="root",
+                user="flaskuser",
                 password="root",
                 database="smartreserva",
                 auth_plugin='mysql_native_password'
@@ -216,7 +216,7 @@ def get_user_data(email):
     cursor = None
     try:
         cursor = get_cursor()
-        cursor.execute("SELECT Id, email, senha, nome, role FROM usuarios WHERE email = %s", (email,))
+        cursor.execute("SELECT id, email, senha, nome, role FROM usuarios WHERE email = %s", (email,))
         user = cursor.fetchone()
         return user
     except Exception as e:
@@ -248,7 +248,7 @@ def cadastro_post():
     nome = request.form.get('nome')
     email = request.form.get('email')
     senha = request.form.get('senha')
-    Id = request.form.get('Id')
+    id = request.form.get('id')
     role = request.form.get('role')
 
     current_role = None
@@ -292,12 +292,12 @@ def cadastro_post():
             return redirect('/cadastro?error=name_exists')
         
         # Verificar se o número da matrícula já existe
-        cursor.execute("SELECT 1 FROM usuarios WHERE Id = %s", (Id,))
+        cursor.execute("SELECT 1 FROM usuarios WHERE id = %s", (id,))
         if cursor.fetchone():
             return redirect('/cadastro?error=matricula_exists')
 
         insert_query = "INSERT INTO usuarios (nome, email, senha, id, role) VALUES (%s, %s, %s, %s, %s)"
-        insert_values = (nome, email, senha, Id, role)
+        insert_values = (nome, email, senha, id, role)
         cursor.execute(insert_query, insert_values)
         get_db_connection().commit()
         
@@ -427,14 +427,14 @@ def cadastroItensPost():
     quantidade = request.form.get('item-quantity')
     id_localizacao = request.form.get('item-location')
     especificacoestec = request.form.get('item-specs')
-    categoria = request.form.get('categoria')
+    categoria = request.form.get('categoria-selecionada')
     
     print(f"Dados recebidos do formulário:")
     print(f"Nome: {nome}")
-    print(f"ID Classificação: {id_classificacao}")
+    print(f"id Classificação: {id_classificacao}")
     print(f"Descrição: {descricao}")
     print(f"Quantidade: {quantidade}")
-    print(f"ID Localização: {id_localizacao}")
+    print(f"id Localização: {id_localizacao}")
     print(f"Especificações: {especificacoestec}")
     print(f"Categoria: {categoria}")
     
@@ -454,10 +454,10 @@ def cadastroItensPost():
     try:
         id_classificacao_int = int(id_classificacao)
         
-        if categoria == 'equipamento' and id_classificacao_int == 3:
+        if categoria == 'equipamento' and id_classificacao_int in [6, 7]:
             return redirect('/cadastroItem.html?error=incompativel_equipamento')
         
-        if categoria == 'espaco' and id_classificacao_int != 3:
+        if categoria == 'espaco' and id_classificacao_int not in [6, 7]:
             return redirect('/cadastroItem.html?error=incompativel_espaco')
     except ValueError:
         return redirect('/cadastroItem.html?error=classificacao_invalida')
