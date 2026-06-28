@@ -383,10 +383,6 @@ def voltar_index():
 # CADASTRO DE ITENS - CORRIGIDO
 # =============================================
 
-# =============================================
-# CADASTRO DE ITENS - CORRIGIDO
-# =============================================
-
 @app.route('/cadastroItem.html', methods=['GET'])
 def cadastroItens():
     check = require_login_or_redirect()
