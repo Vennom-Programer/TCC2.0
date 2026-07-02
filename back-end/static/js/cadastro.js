@@ -3,18 +3,23 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!form) return;
 
     // Função para verificar constantemente o tipo de usuário logado
+    function normalizarRole(role) {
+        const valor = (role || '').toString().trim().toLowerCase();
+        if (valor === 'adm' || valor === 'admin') {
+            return 'admin';
+        }
+        if (valor === 'prof' || valor === 'professor') {
+            return 'professor';
+        }
+        return valor;
+    }
+
     function verificarTipoUsuario() {
-        // Esta função pode ser expandida para fazer uma requisição ao servidor
-        // e verificar o role do usuário atual em tempo real
-        console.log('Verificando tipo de usuário...');
-        
-        // Por enquanto, vamos verificar se há um usuário logado na sessão
-        // Em uma implementação real, você faria uma chamada AJAX para o servidor
-        const usuarioLogado = sessionStorage.getItem('usuario_logado');
-        const usuarioRole = sessionStorage.getItem('usuario_role');
-        
+        const usuarioLogado = document.body.dataset.userLoggedIn === 'true';
+        const usuarioRole = normalizarRole(document.body.dataset.userRole);
+
         return {
-            logado: !!usuarioLogado,
+            logado: usuarioLogado,
             role: usuarioRole
         };
     }
@@ -26,8 +31,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const adminAuthContainer = document.getElementById('admin-auth');
         
         if (roleInputsContainer) {
-            if (!usuarioInfo.logado || usuarioInfo.role !== 'adm') {
-                // Usuário não logado ou não é ADM - esconder seleção de role
+            if (!usuarioInfo.logado || usuarioInfo.role !== 'admin') {
+                // Usuário não logado ou não é admin - esconder seleção de role
                 roleInputsContainer.style.display = 'none';
                 
                 // Definir role padrão como professor
@@ -36,7 +41,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     professorRadio.checked = true;
                 }
             } else {
-                // Usuário é ADM - mostrar seleção de role
+                // Usuário é admin - mostrar seleção de role
                 roleInputsContainer.style.display = 'block';
             }
         }
@@ -58,17 +63,16 @@ document.addEventListener('DOMContentLoaded', function () {
         const nome = document.getElementById('nome').value.trim();
         const email = document.getElementById('email').value.trim();
         const senha = document.getElementById('senha').value;
-        const numeroDaMatricula = document.getElementById('numeroDaMatricula').value;
         
         // Verificar novamente o tipo de usuário no momento do submit
         const usuarioInfo = verificarTipoUsuario();
         
-        // Verificar role radios apenas se o usuário for ADM
+        // Verificar role radios apenas se o usuário for admin
         const roleInputs = document.getElementsByName('role');
         let selectedRole = null;
         
-        if (usuarioInfo.logado && usuarioInfo.role === 'adm') {
-            // Apenas ADMs podem ver e selecionar roles
+        if (usuarioInfo.logado && usuarioInfo.role === 'admin') {
+            // Apenas admins podem ver e selecionar roles
             for (let i = 0; i < roleInputs.length; i++) {
                 if (roleInputs[i].checked) {
                     selectedRole = roleInputs[i].value;
@@ -81,37 +85,23 @@ document.addEventListener('DOMContentLoaded', function () {
                 mensagemDiv.style.color = 'red';
                 return;
             }
-            
-            // admin password visibility
-            const adminAuth = document.getElementById('admin-auth');
-            if (adminAuth) {
-                adminAuth.style.display = (selectedRole === 'adm') ? 'block' : 'none';
-            }
         } else {
-            // Usuário não ADM - definir role padrão como professor
+            // Usuário não admin - definir role padrão como professor
             selectedRole = 'professor';
         }
 
-        // Se criando um ADM, garantir que o usuário atual é ADM e que a senha ADM foi fornecida
-        if (selectedRole === 'adm') {
-            if (!usuarioInfo.logado || usuarioInfo.role !== 'adm') {
+        // Se criando um admin, garantir que o usuário atual é admin
+        if (selectedRole === 'admin') {
+            if (!usuarioInfo.logado || usuarioInfo.role !== 'admin') {
                 e.preventDefault();
                 mensagemDiv.textContent = 'Apenas administradores podem criar contas de ADM.';
-                mensagemDiv.style.color = 'red';
-                return;
-            }
-            
-            const adminPass = document.getElementById('admin_password');
-            if (!adminPass || !adminPass.value) {
-                e.preventDefault();
-                mensagemDiv.textContent = 'Por favor, confirme a senha do ADM para criar outro ADM.';
                 mensagemDiv.style.color = 'red';
                 return;
             }
         }
 
         // Validações básicas de campos obrigatórios
-        if (!nome || !email || !senha || !numeroDaMatricula) {
+        if (!nome || !email || !senha) {
             e.preventDefault();
             mensagemDiv.textContent = 'Por favor, preencha todos os campos.';
             mensagemDiv.style.color = 'red';
@@ -138,36 +128,10 @@ document.addEventListener('DOMContentLoaded', function () {
         mensagemDiv.textContent = '';
     });
 
-    // Toggle admin password input quando admin radio é selecionado
-    const roleInputsLive = document.getElementsByName('role');
-    if (roleInputsLive && roleInputsLive.length) {
-        const adminAuth = document.getElementById('admin-auth');
-        for (let i = 0; i < roleInputsLive.length; i++) {
-            roleInputsLive[i].addEventListener('change', function () {
-                if (!adminAuth) return;
-                
-                // Verificar se o usuário atual tem permissão para criar ADM
-                const usuarioInfo = verificarTipoUsuario();
-                if (this.value === 'adm' && this.checked) {
-                    if (usuarioInfo.logado && usuarioInfo.role === 'adm') {
-                        adminAuth.style.display = 'block';
-                    } else {
-                        this.checked = false;
-                        const professorRadio = document.querySelector('input[value="professor"]');
-                        if (professorRadio) {
-                            professorRadio.checked = true;
-                        }
-                        alert('Apenas administradores podem criar contas de ADM.');
-                    }
-                } else {
-                    adminAuth.style.display = 'none';
-                }
-            });
-        }
-    }
+
 
     // Adicionar validação em tempo real para melhor UX
-    const campos = ['nome', 'email', 'senha', 'numeroDaMatricula'];
+    const campos = ['nome', 'email', 'senha'];
     campos.forEach(campo => {
         const elemento = document.getElementById(campo);
         if (elemento) {
@@ -224,12 +188,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     if (params.get('error') === '1') {
         showModal('Erro ao cadastrar. Tente novamente mais tarde.');
-        const url = new URL(window.location);
-        url.searchParams.delete('error');
-        window.history.replaceState({}, '', url.pathname + url.search);
-    }
-    if (params.get('error') === 'admin_auth_failed') {
-        showModal('Autenticação do ADM falhou: senha incorreta.');
         const url = new URL(window.location);
         url.searchParams.delete('error');
         window.history.replaceState({}, '', url.pathname + url.search);
@@ -312,8 +270,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const nome = document.getElementById('nome').value.trim();
         const email = document.getElementById('email').value.trim();
         const senha = document.getElementById('senha').value;
-        const numeroDaMatricula = document.getElementById('numeroDaMatricula').value;
-        
         // Verificar novamente o tipo de usuário no momento do submit
         const usuarioInfo = await verificarUsuarioAtual();
         
@@ -340,23 +296,16 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         // Validações
-        if (!nome || !email || !senha || !numeroDaMatricula) {
+        if (!nome || !email || !senha) {
             mensagemDiv.textContent = 'Por favor, preencha todos os campos.';
             mensagemDiv.style.color = 'red';
             return;
         }
 
         // Se tentando criar ADM, verificar permissões
-        if (selectedRole === 'adm') {
-            if (!usuarioInfo.logado || usuarioInfo.role !== 'adm') {
+        if (selectedRole === 'admin') {
+            if (!usuarioInfo.logado || usuarioInfo.role !== 'admin') {
                 mensagemDiv.textContent = 'Apenas administradores podem criar contas de ADM.';
-                mensagemDiv.style.color = 'red';
-                return;
-            }
-            
-            const adminPass = document.getElementById('admin_password');
-            if (!adminPass || !adminPass.value) {
-                mensagemDiv.textContent = 'Por favor, confirme a senha do ADM para criar outro ADM.';
                 mensagemDiv.style.color = 'red';
                 return;
             }

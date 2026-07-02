@@ -409,13 +409,13 @@ async handleItemSubmit(e) {
                 
                 if (categoria === 'equipamento') {
                     const tipoInt = parseInt(this.selectEquipamento.value);
-                    if (tipoInt === 3) {
+                    if (tipoInt === 5 || tipoInt === 6) {
                         this.showFieldError('item-type-equipamento', 'Selecione o tipo de equipamento abaixo. Selecione outro tipo.');
                         return false;
                     }
                 } else if (categoria === 'espaco') {
                     const tipoInt = parseInt(this.selectEspaco.value);
-                    if (tipoInt !== 3 && tipoInt !== 5) {
+                    if (tipoInt == 1 && tipoInt == 2) {
                         this.showFieldError('item-type-espaco', 'Selecione o tipo de espaço abaixo. Selecione outro tipo.');
                         return false;
                     }

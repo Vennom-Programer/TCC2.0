@@ -13,12 +13,12 @@
     <form id="loginForm" action="/login" method="POST" novalidate>
       <fieldset class="role-fieldset">
         <legend>Você é:</legend>
-        <label><input class="adm" type="radio" name="role" value="admin"> Administrador</label>
-        <label><input class="profesor" type="radio" name="role" value="professor"> Professor</label>
+        <label for="role-admin"><input id="role-admin" class="adm" type="radio" name="role" value="admin" autocomplete="off"> Administrador</label>
+        <label for="role-professor"><input id="role-professor" class="profesor" type="radio" name="role" value="professor" autocomplete="off"> Professor</label>
       </fieldset>
       <div id="error" class="error-message" aria-live="polite"></div>
       <label for="email">E-mail</label>
-      <input type="email" id="email" name="email" placeholder="Digite seu email" required autocomplete="username" aria-required="true" aria-describedby="emailHelp" />
+      <input type="email" id="email" name="email" placeholder="Digite seu email" required autocomplete="email" aria-required="true" aria-describedby="emailHelp" />
       <label for="password">Senha</label>
       <input type="password" id="password" name="password" placeholder="Digite sua senha" required autocomplete="current-password" aria-required="true" />
       <button type="submit">Entrar</button>

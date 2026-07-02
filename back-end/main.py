@@ -174,6 +174,18 @@ with app.app_context():
 # FUNÇÕES AUXILIARES CORRIGIDAS
 # =============================================
 
+def normalize_role(role):
+    """Normaliza valores de papel para um formato consistente no sistema."""
+    if role is None:
+        return ''
+    role_str = str(role).strip().lower()
+    if role_str in {'admin', 'adm'}:
+        return 'admin'
+    if role_str in {'professor', 'prof'}:
+        return 'professor'
+    return role_str
+
+
 def get_user_role(email):
     """Query the database for the given user's role. Returns the role string or None."""
     cursor = None
@@ -194,10 +206,10 @@ def require_admin_or_redirect():
     """Helper used in routes to ensure the current session user is an admin. Returns None if OK or a redirect response."""
     if not session.get('usuario_logado'):
         return redirect('/login')
-    db_role = get_user_role(session.get('usuario_logado'))
+    db_role = normalize_role(get_user_role(session.get('usuario_logado')))
     if not db_role:
-        db_role = session.get('usuario_role')
-    if str(db_role).strip().lower() != 'admin':
+        db_role = normalize_role(session.get('usuario_role'))
+    if db_role != 'admin':
         return redirect('/?error=forbidden')
     return None
 
@@ -206,7 +218,7 @@ def require_login_or_redirect():
     if not session.get('usuario_logado'):
         return redirect('/login')
     # refresh authoritative role from DB when possible
-    db_role = get_user_role(session.get('usuario_logado'))
+    db_role = normalize_role(get_user_role(session.get('usuario_logado')))
     if db_role:
         session['usuario_role'] = db_role
     return None
@@ -236,10 +248,10 @@ def menu():
 @app.route('/cadastro')
 def cadastro():
     if session.get('usuario_logado'):
-        db_role = get_user_role(session.get('usuario_logado'))
+        db_role = normalize_role(get_user_role(session.get('usuario_logado')))
         if not db_role:
-            db_role = session.get('usuario_role')
-        if db_role and str(db_role).strip().lower() != 'admin':
+            db_role = normalize_role(session.get('usuario_role'))
+        if db_role and db_role != 'admin':
             return redirect('/?error=forbidden')
     return render_template('cadastro.html')
 
@@ -253,26 +265,16 @@ def cadastro_post():
 
     current_role = None
     if session.get('usuario_logado'):
-        current_role = get_user_role(session.get('usuario_logado'))
+        current_role = normalize_role(get_user_role(session.get('usuario_logado')))
         if not current_role:
-            current_role = session.get('usuario_role')
-    if session.get('usuario_logado') and str(current_role).strip().lower() != 'admin':
+            current_role = normalize_role(session.get('usuario_role'))
+    if session.get('usuario_logado') and current_role != 'admin':
         return redirect('/cadastro?error=forbden')
 
-    if role and str(current_role).strip().lower() != 'admin':
+    if role and current_role != 'admin':
         return redirect('/cadastro?error=forbden')
 
-    if str(current_role).strip().lower() == 'admin' and role and str(role).strip().lower() == 'admin':
-        admin_password = request.form.get('admin_password')
-        cursor_check = None
-        try:
-            cursor_check = get_cursor()
-            cursor_check.execute("SELECT senha FROM usuarios WHERE email = %s", (session.get('usuario_logado'),))
-            row = cursor_check.fetchone()
-            if not row or row['senha'] != admin_password:
-                return redirect('/cadastro?error=admin_auth_failed')
-        finally:
-            close_cursor(cursor_check)
+    role = normalize_role(role)
 
     if not session.get('usuario_logado'):
         role = 'professor'
@@ -335,13 +337,14 @@ def loginPost():
             print(f"[LOGIN] Falha - Usuário ou senha incorretos para email: {email}")
             return render_template('login.html', error="Email ou senha incorretos")
 
-        db_role = str(usuario['role']).strip().lower() if usuario['role'] else ''
+        db_role = normalize_role(usuario['role']) if usuario['role'] else ''
+        role_normalizado = normalize_role(role)
 
         # Verificar se o tipo selecionado (ADM/Professor) confere com o tipo no banco
-        if role:
+        if role_normalizado:
             if db_role == '':
                 return render_template('login.html', error="Erro no servidor: função de usuário não definida.")
-            if role.strip().lower() != db_role:
+            if role_normalizado != db_role:
                 print(f"[LOGIN] Falha - Tipo incorreto. Esperado: {db_role}, recebido: {role}")
                 return render_template('login.html', error="Você escolheu o tipo de usuário errado.")
 
@@ -368,7 +371,7 @@ def index():
     check = require_login_or_redirect()
     if check:
         return check
-    return render_template('/index.html')
+    return render_template('index.html')
 
 # =============================================
 # NOVA ROTA: VOLTAR PARA INDEX
@@ -377,7 +380,7 @@ def index():
 @app.route('/voltar_index')
 def voltar_index():
     """Rota para voltar para a página index"""
-    return redirect(url_for('index.html'))
+    return redirect(url_for('index'))
 
 # =============================================
 # CADASTRO DE ITENS - CORRIGIDO
@@ -423,7 +426,7 @@ def cadastroItensPost():
     quantidade = request.form.get('item-quantity')
     id_localizacao = request.form.get('item-location')
     especificacoestec = request.form.get('item-specs')
-    categoria = request.form.get('categoria-selecionada')
+    categoria = request.form.get('categoria-selecionada') or request.form.get('categoria')
     
     print(f"Dados recebidos do formulário:")
     print(f"Nome: {nome}")
@@ -924,7 +927,7 @@ def api_itens_disponiveis():
         if tipo == 'equipment':
             query += " AND id_classificacao IN (1, 2, 4, 5)"
         elif tipo == 'space':
-            query += " AND id_classificacao = 3"
+            query += " AND id_classificacao IN (6, 7)"
         
         query += " ORDER BY Nome"
         
@@ -1170,12 +1173,14 @@ def api_emprestimo():
             if conflict and conflict['count'] > 0:
                 return jsonify({'error': 'Horário já reservado'}), 409
             
+            data_realizacao_reserva = data.get('data_realizacao_reserva') or datetime.now().strftime('%Y-%m-%d')
+
             cursor.execute("""
                 INSERT INTO emprestimo (id_itens, id_usuario, data_reserva, 
                                     hora_inicio, hora_fim, status, data_realizacao_reserva)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, (data['id_itens'], id_usuario, data['data_reserva'], 
-                  data['hora_inicio'], data['hora_fim'], 'ativo', data['data_realizacao_reserva']))
+                  data['hora_inicio'], data['hora_fim'], 'ativo', data_realizacao_reserva))
             
             get_db_connection().commit()
             
