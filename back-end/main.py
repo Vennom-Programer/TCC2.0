@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, redirect, session, url_for, jsonify # type: ignore
-import mysql.connector # type: ignore
+import mysql.connector
 from datetime import datetime
 import threading
 
@@ -351,7 +351,7 @@ def loginPost():
         # Criar sessão do usuário
         session['usuario_logado'] = email
         session['usuario_role'] = db_role
-        session['usuario_id'] = usuario['id']
+        session['usuario_id'] = usuario['Id']
         session['usuario_nome'] = usuario['nome']
 
         print(f"[LOGIN] Usuário '{email}' logou com sucesso como '{db_role}'.")
