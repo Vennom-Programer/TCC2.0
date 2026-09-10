@@ -7,8 +7,7 @@ import threading
 
 app = Flask(__name__)
 app.secret_key = 'chave_segura_flask_2025_smartreserva'
-[tool.vercel]
-entrypoint = "back-end/main.py"
+
 
 
 # Thread-local storage para conexões do banco
