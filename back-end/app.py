@@ -10,8 +10,6 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY")
 
-
-
 # Thread-local storage para conexões do banco
 thread_local = threading.local()
 
@@ -139,10 +137,6 @@ def corrigir_integridade_banco():
     finally:
         close_cursor(cursor)
 
-# Executar correções na inicialização
-with app.app_context():
-    popular_classificacoes()
-    corrigir_integridade_banco()
 
 
 def verificar_tabela_itens():
@@ -172,11 +166,7 @@ def verificar_tabela_itens():
     finally:
         close_cursor(cursor)
 
-# Adicione esta chamada na inicialização
-with app.app_context():
-    popular_classificacoes()
-    corrigir_integridade_banco()
-    verificar_tabela_itens()  # ← ADICIONE ESTA LINHA
+
 
 # =============================================
 # FUNÇÕES AUXILIARES CORRIGIDAS
