@@ -228,7 +228,7 @@ def get_user_data(email):
     cursor = None
     try:
         cursor = get_cursor()
-        cursor.execute("SELECT id, email, senha, nome, role FROM usuarios WHERE email = %s", (email,))
+        cursor.execute("SELECT Id, email, senha, nome, role FROM usuarios WHERE email = %s", (email,))
         user = cursor.fetchone()
         return user
     except Exception as e:
