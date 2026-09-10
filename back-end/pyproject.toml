@@ -1,2 +1,3 @@
 [tool.vercel]
 entrypoint = "backend.server:app"
+main = "python main.py"
