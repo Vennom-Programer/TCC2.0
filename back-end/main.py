@@ -1,3 +1,5 @@
+from json import tool
+
 from flask import Flask, render_template, request, redirect, session, url_for, jsonify # type: ignore
 import mysql.connector
 from datetime import datetime
@@ -5,6 +7,8 @@ import threading
 
 app = Flask(__name__)
 app.secret_key = 'chave_segura_flask_2025_smartreserva'
+[tool.vercel]
+entrypoint = "back-end/main.py"
 
 
 # Thread-local storage para conexões do banco
