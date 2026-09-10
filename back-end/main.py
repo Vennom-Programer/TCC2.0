@@ -1,12 +1,14 @@
-from json import tool
-
 from flask import Flask, render_template, request, redirect, session, url_for, jsonify # type: ignore
 import mysql.connector
 from datetime import datetime
 import threading
+import os
+from dotenv import load_dotenv # type: ignore
+
+load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = 'chave_segura_flask_2025_smartreserva'
+app.secret_key = os.getenv("SECRET_KEY")
 
 
 
@@ -14,21 +16,22 @@ app.secret_key = 'chave_segura_flask_2025_smartreserva'
 thread_local = threading.local()
 
 def get_db_connection():
-    """Obtém ou cria uma conexão com o banco de dados para a thread atual"""
-    if not hasattr(thread_local, 'db_connection') or not thread_local.db_connection.is_connected():
-        try:
+    try:
+        if not hasattr(thread_local, 'db_connection') or not thread_local.db_connection.is_connected():
             thread_local.db_connection = mysql.connector.connect(
-                host="localhost",
-                user="flaskuser",
-                password="root",
-                database="smartreserva",
+                host=os.getenv("DB_HOST"),
+                user=os.getenv("DB_USER"),
+                password=os.getenv("DB_PASSWORD"),
+                database=os.getenv("DB_NAME"),
+                port=int(os.getenv("DB_PORT", 3306)),
                 auth_plugin='mysql_native_password'
             )
-            print("Nova conexão MySQL estabelecida")
-        except mysql.connector.Error as e:
-            print(f"Erro ao conectar com o banco: {e}")
-            raise
-    return thread_local.db_connection
+
+        return thread_local.db_connection
+
+    except mysql.connector.Error as err:
+        print(f"Erro ao conectar com o banco: {err}")
+        return None
 
 def get_cursor():
     """Obtém um cursor para a conexão atual"""
