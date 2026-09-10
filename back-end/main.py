@@ -24,7 +24,9 @@ def get_db_connection():
                 password=os.getenv("DB_PASSWORD"),
                 database=os.getenv("DB_NAME"),
                 port=int(os.getenv("DB_PORT", 3306)),
-                auth_plugin='mysql_native_password'
+                ssl_ca=os.path.join(os.path.dirname(__file__), "ca.pem"),
+                ssl_verify_cert=True,
+                ssl_verify_identity=False
             )
 
         return thread_local.db_connection
