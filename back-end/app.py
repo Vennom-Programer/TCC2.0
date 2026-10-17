@@ -1,149 +1,168 @@
-from flask import Flask, render_template, request, redirect, session, url_for, jsonify # type: ignore
-import mysql.connector
-from datetime import datetime
-import threading
+import hmac
+import logging
 import os
-from dotenv import load_dotenv # type: ignore
+import re
+import threading
+from contextlib import contextmanager
+from datetime import datetime, timedelta
+from functools import wraps
+from urllib.parse import urlparse
+
+import mysql.connector
+from dotenv import load_dotenv
+from flask import (Flask, g, jsonify, redirect, render_template, request,
+                   session, url_for)
+from mysql.connector import pooling
+from werkzeug.security import check_password_hash, generate_password_hash
+
+try:
+    from zoneinfo import ZoneInfo
+    TZ = ZoneInfo(os.getenv("APP_TZ", "America/Sao_Paulo"))
+except Exception:  # tzdata ausente (ex.: Windows sem o pacote tzdata)
+    TZ = None
 
 load_dotenv()
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+log = logging.getLogger("reservas")
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# =============================================
+# CONFIGURAÇÃO DA APLICAÇÃO
+# =============================================
+
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError("SECRET_KEY não definida. Configure-a no arquivo .env")
+
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY")
+app.secret_key = SECRET_KEY
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    # Em produção (HTTPS) defina SESSION_COOKIE_SECURE=1 no .env
+    SESSION_COOKIE_SECURE=os.getenv("SESSION_COOKIE_SECURE", "0") == "1",
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
+)
 
-# Thread-local storage para conexões do banco
-thread_local = threading.local()
+ROLE_ADMIN = "admin"
+ROLE_PROFESSOR = "professor"
+ROLES_VALIDOS = {ROLE_ADMIN, ROLE_PROFESSOR}
 
-def get_db_connection():
+# Classificações 6 (Laboratório) e 7 (Auditório) são espaços; as demais, equipamentos
+CLASSIFICACOES_ESPACO = (6, 7)
+CLASSIFICACOES_PADRAO = [
+    (1, 'Data-Show'),
+    (2, 'Caixa de Som'),
+    (3, 'Microfone'),
+    (4, 'Notebook'),
+    (5, 'Eletrônico'),
+    (6, 'Laboratório'),
+    (7, 'Auditório'),
+]
+
+# Status que ocupam o horário (inclui 'ativo' por compatibilidade com registros antigos)
+STATUS_ATIVOS = ('reservado', 'em uso', 'ativo')
+STATUS_NOVA_RESERVA = 'reservado'
+
+SENHA_MIN = 6
+SENHA_MAX = 128
+EMAIL_RE = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
+
+
+def agora():
+    return datetime.now(TZ) if TZ else datetime.now()
+
+
+# =============================================
+# BANCO DE DADOS (pool + conexão por requisição)
+# =============================================
+
+_pool = None
+_pool_lock = threading.Lock()
+
+
+def _db_config():
+    config = dict(
+        host=os.getenv("DB_HOST"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD"),
+        database=os.getenv("DB_NAME"),
+        port=int(os.getenv("DB_PORT", "3306")),
+        connection_timeout=10,
+    )
+    ca_path = os.path.join(BASE_DIR, "ca.pem")
+    if os.path.exists(ca_path):
+        config.update(ssl_ca=ca_path, ssl_verify_cert=True, ssl_verify_identity=False)
+    else:
+        log.warning("ca.pem não encontrado; conectando sem verificação de certificado SSL")
+    return config
+
+
+def get_pool():
+    global _pool
+    if _pool is None:
+        with _pool_lock:
+            if _pool is None:
+                _pool = pooling.MySQLConnectionPool(
+                    pool_name="reservas_pool",
+                    pool_size=int(os.getenv("DB_POOL_SIZE", "5")),
+                    **_db_config(),
+                )
+    return _pool
+
+
+def get_db():
+    """Conexão do pool, uma por requisição (devolvida ao pool no teardown)."""
+    if 'db' not in g:
+        g.db = get_pool().get_connection()
+    return g.db
+
+
+@contextmanager
+def db_cursor():
+    cursor = get_db().cursor(dictionary=True, buffered=True)
     try:
-        if not hasattr(thread_local, 'db_connection') or not thread_local.db_connection.is_connected():
-            thread_local.db_connection = mysql.connector.connect(
-                host=os.getenv("DB_HOST"),
-                user=os.getenv("DB_USER"),
-                password=os.getenv("DB_PASSWORD"),
-                database=os.getenv("DB_NAME"),
-                port=int(os.getenv("DB_PORT", 3306)),
-                ssl_ca=os.path.join(os.path.dirname(__file__), "ca.pem"),
-                ssl_verify_cert=True,
-                ssl_verify_identity=False
-            )
-
-        return thread_local.db_connection
-
-    except mysql.connector.Error as err:
-        print(f"Erro ao conectar com o banco: {err}")
-        return None
-
-def get_cursor():
-    """Obtém um cursor para a conexão atual"""
-    connection = get_db_connection()
-    return connection.cursor(dictionary=True)
-
-def close_cursor(cursor):
-    """Fecha o cursor de forma segura"""
-    try:
-        if cursor:
+        yield cursor
+    finally:
+        try:
             cursor.close()
-    except Exception as e:
-        print(f"Erro ao fechar cursor: {e}")
+        except Exception:
+            log.exception("Erro ao fechar cursor")
 
-        
 
-# =============================================
-# NOVA FUNÇÃO: POPULAR CLASSIFICAÇÕES
-# =============================================
-
-def popular_classificacoes():
-    """Popula a tabela de classificações com os tipos padrão"""
-    cursor = None
+@app.teardown_appcontext
+def close_db(exc=None):
+    db = g.pop('db', None)
+    if db is None:
+        return
     try:
-        cursor = get_cursor()
-        
-        # Verificar se já existem classificações
-        cursor.execute("SELECT COUNT(*) as count FROM classificacao")
-        result = cursor.fetchone()
-        
-        if result['count'] == 0:
-            # Inserir classificações padrão
-            classificacoes = [
-                (1, 'Data-Show'),
-                (2, 'Caixa de Som'), 
-                (3, 'Microfone'),
-                (4, 'Notebook'),
-                (5, 'Eletrônico'),
-                (6, 'Laboratório'),
-                (7, 'Auditório')
-            ]
-            
-            cursor.executemany(
-                "INSERT INTO classificacao (id, nome) VALUES (%s, %s)",
-                classificacoes
-            )
-            get_db_connection().commit()
-            print("Tabela classificacao populada com dados iniciais")
-            
-    except Exception as e:
-        print(f"Erro ao popular classificações: {e}")
-    finally:
-        close_cursor(cursor)
+        if exc is not None:
+            db.rollback()
+        db.close()
+    except Exception:
+        log.exception("Erro ao devolver conexão ao pool")
 
-# =============================================
-# CORREÇÕES DE INTEGRIDADE REFERENCIAL
-# =============================================
 
-def corrigir_integridade_banco():
-    """Corrige problemas de integridade referencial no banco"""
-    cursor = None
-    try:
-        cursor = get_cursor()
-        
-        # 1. Verificar e popular tabela classificacao se estiver vazia
-        cursor.execute("SELECT COUNT(*) FROM classificacao")
-        if cursor.fetchone()['COUNT(*)'] == 0:
-            cursor.execute("""
-                INSERT INTO classificacao (id, nome) VALUES 
-                (1, 'Data-Show'),
-                (2, 'Caixa de Som'),
-                (3, 'Microfone'),
-                (4, 'Notebook'),
-                (5, 'Eletrônico'),
-                (6, 'Laboratório'),
-                (7, 'Auditório')
-            """)
-            print("Tabela classificacao populada")
-        
-       # 2. Adicionar tabela localizacao se não existir com campos expandidos
+def init_db():
+    """Cria tabelas auxiliares, popula classificações e garante coluna de senha larga."""
+    with db_cursor() as cursor:
         cursor.execute("""
-        CREATE TABLE IF NOT EXISTS localizacao (
-            id INT PRIMARY KEY AUTO_INCREMENT,
-            nome VARCHAR(100) NOT NULL
+            CREATE TABLE IF NOT EXISTS classificacao (
+                id INT PRIMARY KEY,
+                nome VARCHAR(100) NOT NULL
             )
-            """)
-        
-        # Popular localizacao se estiver vazia
-        cursor.execute("SELECT COUNT(*) FROM localizacao")
-        if cursor.fetchone()['COUNT(*)'] == 0:
-            cursor.execute("""
-                INSERT INTO localizacao (nome) VALUES 
-                ('Laboratório de Informática'),
-                ('Auditório'),
-                ('Sala')
-            """)
-            print("Tabela localizacao populada")
-        
-        get_db_connection().commit()
-        
-    except mysql.connector.Error as e:
-        print(f"Erro ao corrigir integridade do banco: {e}")
-    finally:
-        close_cursor(cursor)
-
-
-
-def verificar_tabela_itens():
-    """Verifica e cria a tabela itens se não existir"""
-    cursor = None
-    try:
-        cursor = get_cursor()
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS localizacao (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                nome VARCHAR(100) NOT NULL
+            )
+        """)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS itens (
                 id INT PRIMARY KEY AUTO_INCREMENT,
@@ -159,17 +178,96 @@ def verificar_tabela_itens():
                 FOREIGN KEY (id_localizacao) REFERENCES localizacao(id)
             )
         """)
-        get_db_connection().commit()
-        print("Tabela itens verificada/criada com sucesso")
-    except Exception as e:
-        print(f"Erro ao verificar/criar tabela itens: {e}")
-    finally:
-        close_cursor(cursor)
+        cursor.execute("SELECT COUNT(*) AS total FROM classificacao")
+        if cursor.fetchone()['total'] == 0:
+            cursor.executemany(
+                "INSERT INTO classificacao (id, nome) VALUES (%s, %s)",
+                CLASSIFICACOES_PADRAO,
+            )
+            log.info("Tabela classificacao populada com dados iniciais")
+    get_db().commit()
 
+    # Hashes de senha ocupam ~100-170 caracteres: a coluna precisa ser larga
+    try:
+        with db_cursor() as cursor:
+            cursor.execute("""
+                SELECT DATA_TYPE AS tipo, CHARACTER_MAXIMUM_LENGTH AS tamanho
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'usuarios' AND COLUMN_NAME = 'senha'
+            """)
+            col = cursor.fetchone()
+            if (col and col['tipo'] in ('varchar', 'char')
+                    and col['tamanho'] is not None and col['tamanho'] < 255):
+                cursor.execute("ALTER TABLE usuarios MODIFY senha VARCHAR(255) NOT NULL")
+                log.info("Coluna usuarios.senha ampliada para VARCHAR(255)")
+        get_db().commit()
+    except mysql.connector.Error:
+        log.warning("Não foi possível ampliar usuarios.senha para VARCHAR(255). "
+                    "Faça manualmente: ALTER TABLE usuarios MODIFY senha VARCHAR(255) NOT NULL;")
 
 
 # =============================================
-# FUNÇÕES AUXILIARES CORRIGIDAS
+# SEGURANÇA: ORIGEM DAS REQUISIÇÕES E CABEÇALHOS
+# =============================================
+
+ALLOWED_ORIGINS = {h.strip() for h in os.getenv("ALLOWED_ORIGINS", "").split(",") if h.strip()}
+
+
+def _is_api():
+    return request.path.startswith('/api/')
+
+
+@app.before_request
+def verificar_origem():
+    """Proteção CSRF sem alterar templates: requisições que alteram dados
+    precisam vir da mesma origem (cabeçalho Origin/Referer). Combinada com
+    cookie SameSite=Lax."""
+    if request.method in ('GET', 'HEAD', 'OPTIONS'):
+        return None
+    origem = request.headers.get('Origin') or request.headers.get('Referer')
+    if not origem:
+        return None
+    host = urlparse(origem).netloc
+    if host == request.host or host in ALLOWED_ORIGINS:
+        return None
+    log.warning("Requisição bloqueada por origem diferente: %s %s (origem=%s)",
+                request.method, request.path, origem)
+    if _is_api():
+        return jsonify({'success': False, 'error': 'Origem não permitida'}), 403
+    return "Origem não permitida", 403
+
+
+@app.after_request
+def cabecalhos_seguranca(resp):
+    resp.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    resp.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
+    return resp
+
+
+@app.errorhandler(mysql.connector.Error)
+def erro_banco(e):
+    log.error("Erro de banco em %s %s: %s", request.method, request.path, e)
+    db = g.get('db')
+    if db is not None:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+    if _is_api():
+        return jsonify({'success': False, 'error': 'Erro interno do servidor'}), 500
+    return "Erro interno do servidor. Tente novamente mais tarde.", 500
+
+
+@app.errorhandler(500)
+def erro_interno(e):
+    if _is_api():
+        return jsonify({'success': False, 'error': 'Erro interno do servidor'}), 500
+    return "Erro interno do servidor. Tente novamente mais tarde.", 500
+
+
+# =============================================
+# AUTENTICAÇÃO E AUTORIZAÇÃO
 # =============================================
 
 def normalize_role(role):
@@ -178,1202 +276,828 @@ def normalize_role(role):
         return ''
     role_str = str(role).strip().lower()
     if role_str in {'admin', 'adm'}:
-        return 'admin'
+        return ROLE_ADMIN
     if role_str in {'professor', 'prof'}:
-        return 'professor'
+        return ROLE_PROFESSOR
     return role_str
 
 
-def get_user_role(email):
-    """Query the database for the given user's role. Returns the role string or None."""
-    cursor = None
-    try:
-        cursor = get_cursor()
-        cursor.execute("SELECT role FROM usuarios WHERE email = %s", (email,))
-        row = cursor.fetchone()
-        if row:
-            return row['role']
-    except Exception as e:
-        print(f"Erro ao buscar role: {e}")
+def carregar_usuario_sessao():
+    """Carrega o usuário logado do banco (fonte da verdade do papel).
+    Retorna dict ou None; guarda em g.user para a requisição."""
+    email = session.get('usuario_logado')
+    if not email:
         return None
-    finally:
-        close_cursor(cursor)
-    return None
-
-def require_admin_or_redirect():
-    """Helper used in routes to ensure the current session user is an admin. Returns None if OK or a redirect response."""
-    if not session.get('usuario_logado'):
-        return redirect('/login')
-    db_role = normalize_role(get_user_role(session.get('usuario_logado')))
-    if not db_role:
-        db_role = normalize_role(session.get('usuario_role'))
-    if db_role != 'admin':
-        return redirect('/?error=forbidden')
-    return None
-
-def require_login_or_redirect():
-    """Ensure a user is logged in; if not, redirect to /login. Refreshes session role from DB."""
-    if not session.get('usuario_logado'):
-        return redirect('/login')
-    # refresh authoritative role from DB when possible
-    db_role = normalize_role(get_user_role(session.get('usuario_logado')))
-    if db_role:
-        session['usuario_role'] = db_role
-    return None
-
-def get_user_data(email):
-    """Query the database for the given user's complete data. Returns dict or None."""
-    cursor = None
-    try:
-        cursor = get_cursor()
-        cursor.execute("SELECT Id, email, senha, nome, role FROM usuarios WHERE email = %s", (email,))
-        user = cursor.fetchone()
-        return user
-    except Exception as e:
-        print(f"Erro ao buscar dados do usuário: {e}")
+    if 'user' in g:
+        return g.user
+    with db_cursor() as cursor:
+        cursor.execute("SELECT Id, nome, email, role FROM usuarios WHERE email = %s", (email,))
+        usuario = cursor.fetchone()
+    if not usuario:
+        session.clear()
         return None
-    finally:
-        close_cursor(cursor)
+    usuario['role'] = normalize_role(usuario['role'])
+    session['usuario_role'] = usuario['role']
+    session['usuario_nome'] = usuario['nome']
+    session['usuario_id'] = usuario['Id']
+    g.user = usuario
+    return usuario
+
+
+def _nao_autorizado():
+    if _is_api():
+        return jsonify({'success': False, 'error': 'Não autorizado'}), 401
+    return redirect('/login')
+
+
+def _proibido(msg='Acesso restrito a administradores'):
+    if _is_api():
+        return jsonify({'success': False, 'error': msg}), 403
+    return redirect('/index.html?error=forbidden')
+
+
+def login_required(view):
+    @wraps(view)
+    def wrapper(*args, **kwargs):
+        if not carregar_usuario_sessao():
+            return _nao_autorizado()
+        return view(*args, **kwargs)
+    return wrapper
+
+
+def admin_required(view):
+    @wraps(view)
+    def wrapper(*args, **kwargs):
+        usuario = carregar_usuario_sessao()
+        if not usuario:
+            return _nao_autorizado()
+        if usuario['role'] != ROLE_ADMIN:
+            return _proibido()
+        return view(*args, **kwargs)
+    return wrapper
+
+
+def verificar_senha(armazenada, informada):
+    """Retorna (senha_correta, precisa_rehash).
+    Aceita hashes do Werkzeug e senhas legadas em texto puro (que são
+    convertidas para hash no primeiro login bem-sucedido)."""
+    if not armazenada or informada is None:
+        return False, False
+    armazenada = str(armazenada)
+    if armazenada.startswith(('scrypt:', 'pbkdf2:')):
+        return check_password_hash(armazenada, informada), False
+    correta = hmac.compare_digest(armazenada.encode('utf-8'), informada.encode('utf-8'))
+    return correta, correta
+
 
 # =============================================
-# ROTAS PRINCIPAIS (CORRIGIDAS)
+# UTILIDADES
+# =============================================
+
+def fmt_hhmm(valor):
+    """Converte TIME do MySQL (timedelta) / time / str em 'HH:MM'."""
+    if valor is None:
+        return ''
+    if isinstance(valor, timedelta):
+        total = int(valor.total_seconds())
+        return f"{total // 3600:02d}:{(total % 3600) // 60:02d}"
+    if hasattr(valor, 'strftime'):
+        return valor.strftime('%H:%M')
+    return str(valor)[:5]
+
+
+def _parse_hora(valor):
+    valor = str(valor).strip()
+    for fmt in ('%H:%M', '%H:%M:%S'):
+        try:
+            return datetime.strptime(valor, fmt).time()
+        except ValueError:
+            continue
+    raise ValueError(valor)
+
+
+def _parse_data(valor):
+    valor = str(valor).strip()
+    for fmt in ('%Y-%m-%d', '%d/%m/%Y'):
+        try:
+            return datetime.strptime(valor, fmt).date()
+        except ValueError:
+            continue
+    raise ValueError(valor)
+
+
+def _int_ou_none(valor):
+    try:
+        return int(valor)
+    except (TypeError, ValueError):
+        return None
+
+
+# =============================================
+# ROTAS: LOGIN, CADASTRO E LOGOUT
 # =============================================
 
 @app.route('/')
 def menu():
+    if session.get('usuario_logado') and carregar_usuario_sessao():
+        return redirect('/index.html')
     return render_template('login.html')
 
-@app.route('/cadastro')
-def cadastro():
-    if session.get('usuario_logado'):
-        db_role = normalize_role(get_user_role(session.get('usuario_logado')))
-        if not db_role:
-            db_role = normalize_role(session.get('usuario_role'))
-        if db_role and db_role != 'admin':
-            return redirect('/?error=forbidden')
-    return render_template('cadastro.html')
-
-@app.route('/cadastro', methods=['POST'])
-def cadastro_post():
-    nome = request.form.get('nome')
-    email = request.form.get('email')
-    senha = request.form.get('senha')
-    id = request.form.get('id')
-    role = request.form.get('role')
-
-    current_role = None
-    if session.get('usuario_logado'):
-        current_role = normalize_role(get_user_role(session.get('usuario_logado')))
-        if not current_role:
-            current_role = normalize_role(session.get('usuario_role'))
-    if session.get('usuario_logado') and current_role != 'admin':
-        return redirect('/cadastro?error=forbden')
-
-    if role and current_role != 'admin':
-        return redirect('/cadastro?error=forbden')
-
-    role = normalize_role(role)
-
-    if not session.get('usuario_logado'):
-        role = 'professor'
-
-    cursor = None
-    try:
-        cursor = get_cursor()
-        
-        # Verificar se o email já existe
-        cursor.execute("SELECT 1 FROM usuarios WHERE email = %s", (email,))
-        if cursor.fetchone():
-            return redirect('/cadastro?error=exists')
-        
-        # Verificar se o nome completo já existe
-        cursor.execute("SELECT 1 FROM usuarios WHERE nome = %s", (nome,))
-        if cursor.fetchone():
-            return redirect('/cadastro?error=name_exists')
-        
-        # Verificar se o número da matrícula já existe
-        cursor.execute("SELECT 1 FROM usuarios WHERE id = %s", (id,))
-        if cursor.fetchone():
-            return redirect('/cadastro?error=matricula_exists')
-
-        insert_query = "INSERT INTO usuarios (nome, email, senha, id, role) VALUES (%s, %s, %s, %s, %s)"
-        insert_values = (nome, email, senha, id, role)
-        cursor.execute(insert_query, insert_values)
-        get_db_connection().commit()
-        
-        redirect_url = '/cadastro?success=1'
-        if role:
-            redirect_url += '&role=' + role
-        return redirect(redirect_url)
-        
-    except Exception as e:
-        print(f"Erro no cadastro: {e}")
-        return redirect('/cadastro?error=1')
-    finally:
-        close_cursor(cursor)
 
 @app.route('/login')
 def login():
     return render_template('login.html')
 
+
 @app.route('/login', methods=['POST'])
 def loginPost():
-    email = request.form.get('email')
-    senha = request.form.get('password')
-    role = request.form.get('role')
+    email = (request.form.get('email') or '').strip().lower()
+    senha = request.form.get('password') or ''
+    role_normalizado = normalize_role(request.form.get('role'))
 
-    cursor = None
-    try:
-        cursor = get_cursor()
-
-        # Buscar usuário pelo email e senha exata
-        cursor.execute("SELECT * FROM usuarios WHERE email = %s AND senha = %s", (email, senha))
+    with db_cursor() as cursor:
+        cursor.execute("SELECT * FROM usuarios WHERE email = %s", (email,))
         usuario = cursor.fetchone()
 
-        # Se não encontrou usuário, exibe erro
-        if not usuario:
-            print(f"[LOGIN] Falha - Usuário ou senha incorretos para email: {email}")
+        correta, precisa_rehash = (False, False)
+        if usuario:
+            correta, precisa_rehash = verificar_senha(usuario.get('senha'), senha)
+
+        if not usuario or not correta:
+            log.info("Login falhou para o email informado")
             return render_template('login.html', error="Email ou senha incorretos")
 
-        db_role = normalize_role(usuario['role']) if usuario['role'] else ''
-        role_normalizado = normalize_role(role)
+        if precisa_rehash:
+            try:
+                cursor.execute("UPDATE usuarios SET senha = %s WHERE Id = %s",
+                               (generate_password_hash(senha), usuario['Id']))
+                get_db().commit()
+            except mysql.connector.Error as e:
+                get_db().rollback()
+                log.warning("Não foi possível migrar a senha para hash: %s", e)
 
-        # Verificar se o tipo selecionado (ADM/Professor) confere com o tipo no banco
-        if role_normalizado:
-            if db_role == '':
-                return render_template('login.html', error="Erro no servidor: função de usuário não definida.")
-            if role_normalizado != db_role:
-                print(f"[LOGIN] Falha - Tipo incorreto. Esperado: {db_role}, recebido: {role}")
-                return render_template('login.html', error="Você escolheu o tipo de usuário errado.")
+    db_role = normalize_role(usuario['role']) if usuario['role'] else ''
 
-        # Criar sessão do usuário
-        session['usuario_logado'] = email
-        session['usuario_role'] = db_role
-        session['usuario_id'] = usuario['Id']
-        session['usuario_nome'] = usuario['nome']
+    if role_normalizado:
+        if db_role == '':
+            return render_template('login.html', error="Erro no servidor: função de usuário não definida.")
+        if role_normalizado != db_role:
+            log.info("Login falhou: tipo de usuário incorreto (esperado %s)", db_role)
+            return render_template('login.html', error="Você escolheu o tipo de usuário errado.")
 
-        print(f"[LOGIN] Usuário '{email}' logou com sucesso como '{db_role}'.")
+    # Nova sessão (evita fixação de sessão)
+    session.clear()
+    session.permanent = True
+    session['usuario_logado'] = usuario['email']
+    session['usuario_role'] = db_role
+    session['usuario_id'] = usuario['Id']
+    session['usuario_nome'] = usuario['nome']
 
-        # Redirecionar corretamente
-        return redirect('/index.html')
+    log.info("Usuário id=%s logou como '%s'", usuario['Id'], db_role)
+    return redirect('/index.html')
 
-    except Exception as e:
-        print(f"[ERRO LOGIN] {e}")
-        return render_template('login.html', error="Erro interno ao fazer login. Tente novamente mais tarde.")
-    finally:
-        close_cursor(cursor)
+
+@app.route('/cadastro')
+def cadastro():
+    usuario = carregar_usuario_sessao()
+    if usuario and usuario['role'] != ROLE_ADMIN:
+        return redirect('/index.html?error=forbidden')
+    return render_template('cadastro.html')
+
+
+@app.route('/cadastro', methods=['POST'])
+def cadastro_post():
+    usuario_atual = carregar_usuario_sessao()
+    if usuario_atual and usuario_atual['role'] != ROLE_ADMIN:
+        return redirect('/cadastro?error=forbidden')
+
+    nome = (request.form.get('nome') or '').strip()
+    email = (request.form.get('email') or '').strip().lower()
+    senha = request.form.get('senha') or ''
+    matricula = (request.form.get('id') or '').strip()
+
+    # Somente administradores definem o papel; todos os demais viram professor
+    role = ROLE_PROFESSOR
+    if usuario_atual:
+        solicitado = normalize_role(request.form.get('role'))
+        if solicitado in ROLES_VALIDOS:
+            role = solicitado
+
+    if (not nome or len(nome) > 255
+            or not EMAIL_RE.fullmatch(email) or len(email) > 255
+            or len(senha) < SENHA_MIN or len(senha) > SENHA_MAX
+            or not matricula.isdigit() or len(matricula) > 18):
+        return redirect('/cadastro?error=1')
+
+    try:
+        with db_cursor() as cursor:
+            cursor.execute(
+                "SELECT email, nome, Id FROM usuarios WHERE email = %s OR nome = %s OR Id = %s",
+                (email, nome, int(matricula)),
+            )
+            existentes = cursor.fetchall()
+            if any(str(r['email']).lower() == email for r in existentes):
+                return redirect('/cadastro?error=exists')
+            if any(str(r['nome']).strip().lower() == nome.lower() for r in existentes):
+                return redirect('/cadastro?error=name_exists')
+            if any(str(r['Id']) == str(int(matricula)) for r in existentes):
+                return redirect('/cadastro?error=matricula_exists')
+
+            cursor.execute(
+                "INSERT INTO usuarios (nome, email, senha, id, role) VALUES (%s, %s, %s, %s, %s)",
+                (nome, email, generate_password_hash(senha), int(matricula), role),
+            )
+        get_db().commit()
+    except mysql.connector.IntegrityError:
+        get_db().rollback()
+        return redirect('/cadastro?error=exists')
+    except mysql.connector.Error as e:
+        get_db().rollback()
+        log.error("Erro no cadastro: %s", e)
+        return redirect('/cadastro?error=1')
+
+    return redirect('/cadastro?success=1&role=' + role)
+
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
 
 
 @app.route('/index.html')
+@login_required
 def index():
-    check = require_login_or_redirect()
-    if check:
-        return check
     return render_template('index.html')
 
-# =============================================
-# NOVA ROTA: VOLTAR PARA INDEX
-# =============================================
 
 @app.route('/voltar_index')
 def voltar_index():
-    """Rota para voltar para a página index"""
     return redirect(url_for('index'))
 
+
 # =============================================
-# CADASTRO DE ITENS - CORRIGIDO
+# CADASTRO DE ITENS (somente administradores)
 # =============================================
 
 @app.route('/cadastroItem.html', methods=['GET'])
+@admin_required
 def cadastroItens():
-    check = require_login_or_redirect()
-    if check:
-        return check
-    
-    # Buscar classificações e localizações para o formulário
-    cursor_classificacoes = None
-    cursor_localizacoes = None
     try:
-        cursor_classificacoes = get_cursor()
-        cursor_classificacoes.execute("SELECT id, nome FROM classificacao ORDER BY id")
-        classificacoes = cursor_classificacoes.fetchall()
-        
-        cursor_localizacoes = get_cursor()
-        cursor_localizacoes.execute("SELECT id, nome FROM localizacao ORDER BY nome")
-        localizacoes = cursor_localizacoes.fetchall()
-        
-        return render_template('cadastroItem.html', 
-                             classificacoes=classificacoes, 
-                             localizacoes=localizacoes)
-    except Exception as e:
-        print(f"Erro ao carregar cadastro de itens: {e}")
+        with db_cursor() as cursor:
+            cursor.execute("SELECT id, nome FROM classificacao ORDER BY id")
+            classificacoes = cursor.fetchall()
+            cursor.execute("SELECT id, nome FROM localizacao ORDER BY nome")
+            localizacoes = cursor.fetchall()
+        return render_template('cadastroItem.html',
+                               classificacoes=classificacoes, localizacoes=localizacoes)
+    except mysql.connector.Error:
+        log.exception("Erro ao carregar cadastro de itens")
         return render_template('cadastroItem.html', classificacoes=[], localizacoes=[])
-    finally:
-        close_cursor(cursor_classificacoes)
-        close_cursor(cursor_localizacoes)
+
 
 @app.route('/cadastroItem.html', methods=['POST'])
+@admin_required
 def cadastroItensPost():
-    check = require_login_or_redirect()
-    if check:
-        return check
-        
-    nome = request.form.get('item-name')
+    nome = (request.form.get('item-name') or '').strip()
     id_classificacao = request.form.get('item-type')
     descricao = request.form.get('item-description')
     quantidade = request.form.get('item-quantity')
     id_localizacao = request.form.get('item-location')
     especificacoestec = request.form.get('item-specs')
     categoria = request.form.get('categoria-selecionada') or request.form.get('categoria')
-    
-    print(f"Dados recebidos do formulário:")
-    print(f"Nome: {nome}")
-    print(f"id Classificação: {id_classificacao}")
-    print(f"Descrição: {descricao}")
-    print(f"Quantidade: {quantidade}")
-    print(f"id Localização: {id_localizacao}")
-    print(f"Especificações: {especificacoestec}")
-    print(f"Categoria: {categoria}")
-    
-    # Validações básicas
+
     if not nome or not id_classificacao or not quantidade or not id_localizacao:
-        print("Erro: Campos obrigatórios não preenchidos")
         return redirect('/cadastroItem.html?error=campos_obrigatorios')
-    
+    if len(nome) > 255:
+        return redirect('/cadastroItem.html?error=1')
+
     try:
         quantidade = int(quantidade)
         if quantidade <= 0:
             return redirect('/cadastroItem.html?error=quantidade_invalida')
     except ValueError:
         return redirect('/cadastroItem.html?error=quantidade_invalida')
-    
-    # Validação categoria vs classificação
-    try:
-        id_classificacao_int = int(id_classificacao)
-        
-        if categoria == 'equipamento' and id_classificacao_int in [6, 7]:
-            return redirect('/cadastroItem.html?error=incompativel_equipamento')
-        
-        if categoria == 'espaco' and id_classificacao_int not in [6, 7]:
-            return redirect('/cadastroItem.html?error=incompativel_espaco')
-    except ValueError:
+
+    id_classificacao_int = _int_ou_none(id_classificacao)
+    id_localizacao_int = _int_ou_none(id_localizacao)
+    if id_classificacao_int is None:
         return redirect('/cadastroItem.html?error=classificacao_invalida')
-    
-    cursor = None
+    if id_localizacao_int is None:
+        return redirect('/cadastroItem.html?error=localizacao_nao_existe')
+
+    if categoria == 'equipamento' and id_classificacao_int in CLASSIFICACOES_ESPACO:
+        return redirect('/cadastroItem.html?error=incompativel_equipamento')
+    if categoria == 'espaco' and id_classificacao_int not in CLASSIFICACOES_ESPACO:
+        return redirect('/cadastroItem.html?error=incompativel_espaco')
+
     try:
-        cursor = get_cursor()
-        
-        # Verificar se a classificação existe
-        cursor.execute("SELECT id FROM classificacao WHERE id = %s", (id_classificacao,))
-        if not cursor.fetchone():
-            return redirect('/cadastroItem.html?error=classificacao_nao_existe')
-        
-        # Verificar se a localização existe
-        cursor.execute("SELECT id FROM localizacao WHERE id = %s", (id_localizacao,))
-        if not cursor.fetchone():
-            return redirect('/cadastroItem.html?error=localizacao_nao_existe')
-        
-        # Inserir item no banco de dados
-        query = """
-        INSERT INTO itens (Nome, id_classificacao, descricao, quantidade, id_localizacao, especificacoestec, categoria)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """
-        values = (nome, id_classificacao, descricao, quantidade, id_localizacao, especificacoestec, categoria)
-        
-        print(f"Executando query: {query}")
-        print(f"Com valores: {values}")
-        
-        cursor.execute(query, values)
-        
-        # COMMIT EXPLÍCITO para garantir que os dados sejam salvos
-        connection = get_db_connection()
-        connection.commit()
-        
-        print("Item cadastrado com sucesso no banco de dados!")
-        
-        # Redirecionar para o catálogo com mensagem de sucesso
+        with db_cursor() as cursor:
+            cursor.execute("SELECT id FROM classificacao WHERE id = %s", (id_classificacao_int,))
+            if not cursor.fetchone():
+                return redirect('/cadastroItem.html?error=classificacao_nao_existe')
+
+            cursor.execute("SELECT id FROM localizacao WHERE id = %s", (id_localizacao_int,))
+            if not cursor.fetchone():
+                return redirect('/cadastroItem.html?error=localizacao_nao_existe')
+
+            cursor.execute("""
+                INSERT INTO itens (Nome, id_classificacao, descricao, quantidade,
+                                   id_localizacao, especificacoestec, categoria)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (nome, id_classificacao_int, descricao, quantidade,
+                  id_localizacao_int, especificacoestec, categoria))
+        get_db().commit()
+        log.info("Item '%s' cadastrado", nome)
         return redirect('/catalogo.html?success=1')
-        
+
     except mysql.connector.IntegrityError as e:
-        print(f"Erro de integridade ao cadastrar item: {e}")
+        get_db().rollback()
+        log.error("Erro de integridade ao cadastrar item: %s", e)
         return redirect('/cadastroItem.html?error=integridade')
     except mysql.connector.Error as e:
-        print(f"Erro MySQL ao cadastrar item: {e}")
+        get_db().rollback()
+        log.error("Erro MySQL ao cadastrar item: %s", e)
         return redirect('/cadastroItem.html?error=banco_dados')
-    except Exception as e:
-        print(f"Erro ao cadastrar item: {e}")
-        return redirect('/cadastroItem.html?error=1')
-    finally:
-        close_cursor(cursor)
+
 
 # =============================================
-# API PARA CRIAR NOVA LOCALIZAÇÃO
+# LOCALIZAÇÕES
 # =============================================
 
 @app.route('/api/localizacoes', methods=['POST'])
+@admin_required
 def criar_localizacao():
-    """API para criar uma nova localização no banco de dados"""
-    check = require_login_or_redirect()
-    if check:
-        return jsonify({'success': False, 'error': 'Não autorizado'}), 401
-    
-    try:
-        data = request.get_json()
-        nome = data.get('nome')
-        
-        # Validação básica
-        if not nome:
-            return jsonify({'success': False, 'error': 'Nome da localização é obrigatório'}), 400
-        
-        cursor = None
-        try:
-            cursor = get_cursor()
-            
-            # Verificar se já existe uma localização com o mesmo nome
-            cursor.execute("SELECT id FROM localizacao WHERE nome = %s", (nome,))
-            if cursor.fetchone():
-                return jsonify({'success': False, 'error': 'Já existe uma localização com este nome'}), 400
-            
-            # Inserir nova localização
-            query = """
-                INSERT INTO localizacao (nome)
-                VALUES (%s)
-            """
-            values = (nome,)  # ← CORRIGIDO: adicione a vírgula para criar uma tupla
-            cursor.execute(query, values)
-            get_db_connection().commit()
-            
-            # Obter o ID da localização recém-criada
-            nova_localizacao_id = cursor.lastrowid
-            
-            return jsonify({
-                'success': True, 
-                'message': 'Localização criada com sucesso',
-                'localizacao': {
-                    'id': nova_localizacao_id,
-                    'nome': nome
-                }
-            })
-            
-        except mysql.connector.IntegrityError as e:
-            print(f"Erro de integridade ao criar localização: {e}")
-            return jsonify({'success': False, 'error': 'Erro de integridade do banco de dados'}), 500
-        except mysql.connector.Error as e:
-            print(f"Erro ao criar localização: {e}")
-            return jsonify({'success': False, 'error': 'Erro ao salvar localização no banco de dados'}), 500
-        finally:
-            close_cursor(cursor)
-            
-    except Exception as e:
-        print(f"Erro geral ao criar localização: {e}")
-        return jsonify({'success': False, 'error': 'Erro interno do servidor'}), 500
+    data = request.get_json(silent=True) or {}
+    nome = (data.get('nome') or '').strip()
+
+    if not nome:
+        return jsonify({'success': False, 'error': 'Nome da localização é obrigatório'}), 400
+    if len(nome) > 100:
+        return jsonify({'success': False, 'error': 'Nome muito longo (máximo 100 caracteres)'}), 400
+
+    with db_cursor() as cursor:
+        cursor.execute("SELECT id FROM localizacao WHERE nome = %s", (nome,))
+        if cursor.fetchone():
+            return jsonify({'success': False, 'error': 'Já existe uma localização com este nome'}), 400
+
+        cursor.execute("INSERT INTO localizacao (nome) VALUES (%s)", (nome,))
+        nova_id = cursor.lastrowid
+    get_db().commit()
+
+    return jsonify({
+        'success': True,
+        'message': 'Localização criada com sucesso',
+        'localizacao': {'id': nova_id, 'nome': nome},
+    })
+
 
 @app.route('/api/localizacoes', methods=['GET'])
+@login_required
 def obter_localizacoes():
-    """API para obter todas as localizações"""
-    check = require_login_or_redirect()
-    if check:
-        return jsonify({'success': False, 'error': 'Não autorizado'}), 401
-    
-    cursor = None
-    try:
-        cursor = get_cursor()
+    with db_cursor() as cursor:
         cursor.execute("SELECT id, nome FROM localizacao ORDER BY nome")
         localizacoes = cursor.fetchall()
-        
-        return jsonify({
-            'success': True,
-            'localizacoes': localizacoes
-        })
-        
-    except Exception as e:
-        print(f"Erro ao buscar localizações: {e}")
-        return jsonify({'success': False, 'error': 'Erro interno do servidor'}), 500
-    finally:
-        close_cursor(cursor)
+    return jsonify({'success': True, 'localizacoes': localizacoes})
+
 
 @app.route('/api/localizacoes/<int:localizacao_id>', methods=['DELETE'])
+@admin_required
 def excluir_localizacao(localizacao_id):
-    """API para excluir uma localização"""
-    check = require_login_or_redirect()
-    if check:
-        return jsonify({'success': False, 'error': 'Não autorizado'}), 401
-    
-    cursor = None
-    try:
-        cursor = get_cursor()
-        
-        # Verificar se existem itens usando esta localização
-        cursor.execute("SELECT COUNT(*) as count FROM itens WHERE id_localizacao = %s", (localizacao_id,))
-        result = cursor.fetchone()
-        
-        if result['count'] > 0:
-            return jsonify({'success': False, 'error': 'Não é possível excluir localização com itens associados'}), 400
-        
-        # Verificar se a localização existe
+    with db_cursor() as cursor:
         cursor.execute("SELECT id FROM localizacao WHERE id = %s", (localizacao_id,))
         if not cursor.fetchone():
             return jsonify({'success': False, 'error': 'Localização não encontrada'}), 404
-        
-        # Excluir localização
+
+        cursor.execute("SELECT COUNT(*) AS total FROM itens WHERE id_localizacao = %s", (localizacao_id,))
+        if cursor.fetchone()['total'] > 0:
+            return jsonify({'success': False,
+                            'error': 'Não é possível excluir localização com itens associados'}), 400
+
         cursor.execute("DELETE FROM localizacao WHERE id = %s", (localizacao_id,))
-        get_db_connection().commit()
-        
-        return jsonify({'success': True, 'message': 'Localização excluída com sucesso'})
-        
-    except mysql.connector.Error as e:
-        print(f"Erro ao excluir localização: {e}")
-        return jsonify({'success': False, 'error': 'Erro interno do servidor'}), 500
-    finally:
-        close_cursor(cursor)
+    get_db().commit()
+    return jsonify({'success': True, 'message': 'Localização excluída com sucesso'})
+
+
+# =============================================
+# CATÁLOGO
+# =============================================
+
+SQL_CATALOGO = """
+    SELECT i.id, i.Nome, i.descricao, i.quantidade,
+           c.nome AS classificacao, l.nome AS localizacao,
+           i.especificacoestec, i.id_classificacao, i.id_localizacao
+    FROM itens i
+    JOIN classificacao c ON i.id_classificacao = c.id
+    JOIN localizacao l ON i.id_localizacao = l.id
+    ORDER BY i.Nome
+"""
+
 
 @app.route('/catalogo.html')
+@login_required
 def catalogo():
-    check = require_login_or_redirect()
-    if check:
-        return check
-    
-    cursor = None
+    usuario_info = {
+        'email': g.user['email'],
+        'nome': g.user['nome'],
+        'role': g.user['role'],
+        'id': g.user['Id'],
+        'is_admin': g.user['role'] == ROLE_ADMIN,
+    }
     try:
-        cursor = get_cursor()
-        cursor.execute("""
-            SELECT i.id, i.Nome, i.descricao, i.quantidade, 
-                   c.nome as classificacao, l.nome as localizacao, 
-                   i.especificacoestec, i.id_classificacao, i.id_localizacao
-            FROM itens i 
-            JOIN classificacao c ON i.id_classificacao = c.id 
-            JOIN localizacao l ON i.id_localizacao = l.id 
-            ORDER BY i.Nome
-        """)
-        itens = cursor.fetchall()
-        
-        # Buscar informações do usuário logado
-        usuario_role = session.get('usuario_role') or ''
-        usuario_info = {
-            'email': session.get('usuario_logado'),
-            'nome': session.get('usuario_nome'),
-            'role': usuario_role,
-            'id': session.get('usuario_id'),
-            'is_admin': str(usuario_role).strip().lower() == 'admin'
-        }
+        with db_cursor() as cursor:
+            cursor.execute(SQL_CATALOGO)
+            itens = cursor.fetchall()
+    except mysql.connector.Error:
+        log.exception("Erro ao carregar catálogo")
+        itens = []
+    return render_template('catalogo.html', itens=itens, user=usuario_info)
 
-        
-        return render_template('catalogo.html', itens=itens, user=usuario_info)
-        
-    except Exception as e:
-        print(f"Erro ao carregar catálogo: {e}")
-        # Retornar dados vazios em caso de erro, mas ainda com informações do usuário
-        usuario_info = {
-            'email': session.get('usuario_logado'),
-            'nome': session.get('usuario_nome'),
-            'role': session.get('usuario_role'),
-            'is_admin': str(session.get('usuario_role', '')).strip().lower() == 'admin'
-        }
-        return render_template('catalogo.html', itens=[], user=usuario_info)
-    finally:
-        close_cursor(cursor)
 
 @app.route('/api/catalogo/itens')
+@login_required
 def api_catalogo_itens():
-    """API para retornar itens do catálogo"""
-    check = require_login_or_redirect()
-    if check:
-        return jsonify({'success': False, 'error': 'Não autorizado'}), 401
-    
-    cursor = None
-    try:
-        cursor = get_cursor()
-        cursor.execute("""
-            SELECT i.id, i.Nome, i.descricao, i.quantidade, 
-                   c.nome as classificacao, l.nome as localizacao, 
-                   i.especificacoestec, i.id_classificacao, i.id_localizacao
-            FROM itens i 
-            JOIN classificacao c ON i.id_classificacao = c.id 
-            JOIN localizacao l ON i.id_localizacao = l.id 
-            ORDER BY i.Nome
-        """)
+    with db_cursor() as cursor:
+        cursor.execute(SQL_CATALOGO)
         itens = cursor.fetchall()
-        
-        return jsonify({
-            'success': True,
-            'itens': itens
-        })
-        
-    except Exception as e:
-        print(f"Erro ao buscar itens do catálogo: {e}")
-        return jsonify({'success': False, 'error': 'Erro interno do servidor'}), 500
-    finally:
-        close_cursor(cursor)
+    return jsonify({'success': True, 'itens': itens})
 
-
-# =============================================
-# ROTAS PARA GERENCIAR ITENS DO CATÁLOGO
-# =============================================
 
 @app.route('/api/itens/<int:item_id>', methods=['PUT'])
+@admin_required
 def editar_item(item_id):
-    """API para editar um item do catálogo"""
-    print(f"\n[PUT /api/itens/{item_id}] Requisição de edição recebida")
-    
-    check = require_login_or_redirect()
-    if check:
-        print(f"[PUT /api/itens/{item_id}] Erro: Usuário não autenticado")
-        return jsonify({'success': False, 'error': 'Não autorizado'}), 401
+    data = request.get_json(silent=True) or {}
+    nome = (data.get('nome') or '').strip()
+    descricao = (data.get('descricao') or '').strip()
+    quantidade = data.get('quantidade')
 
-    # Verificar se o usuário é administrador
-    usuario_role = str(session.get('usuario_role', '')).strip().lower()
-    if usuario_role != 'admin':
-        print(f"[PUT /api/itens/{item_id}] Erro: Usuário não é admin (role={usuario_role})")
-        return jsonify({'success': False, 'error': 'Apenas administradores podem editar itens'}), 403
-
+    if not nome:
+        return jsonify({'success': False, 'error': 'Nome do item é obrigatório'}), 400
+    if len(nome) > 255:
+        return jsonify({'success': False, 'error': 'Nome muito longo (máximo 255 caracteres)'}), 400
+    if quantidade is None:
+        return jsonify({'success': False, 'error': 'Quantidade é obrigatória'}), 400
     try:
-        data = request.get_json()
-        nome = data.get('nome')
-        quantidade = data.get('quantidade')
-        descricao = data.get('descricao')
+        quantidade = int(quantidade)
+    except (ValueError, TypeError):
+        return jsonify({'success': False, 'error': 'Quantidade deve ser um número'}), 400
+    if quantidade < 0:
+        return jsonify({'success': False, 'error': 'Quantidade não pode ser negativa'}), 400
 
-        print(f"[PUT /api/itens/{item_id}] Dados recebidos: nome={nome}, quantidade={quantidade}")
-
-        # Validações básicas
-        if not nome or nome.strip() == '':
-            print(f"[PUT /api/itens/{item_id}] Erro: Nome vazio ou inválido")
-            return jsonify({'success': False, 'error': 'Nome do item é obrigatório'}), 400
-
-        if quantidade is None:
-            print(f"[PUT /api/itens/{item_id}] Erro: Quantidade não fornecida")
-            return jsonify({'success': False, 'error': 'Quantidade é obrigatória'}), 400
-
-        try:
-            quantidade = int(quantidade)
-            if quantidade < 0:
-                print(f"[PUT /api/itens/{item_id}] Erro: Quantidade negativa ({quantidade})")
-                return jsonify({'success': False, 'error': 'Quantidade não pode ser negativa'}), 400
-        except (ValueError, TypeError) as e:
-            print(f"[PUT /api/itens/{item_id}] Erro: Quantidade inválida - {e}")
-            return jsonify({'success': False, 'error': 'Quantidade deve ser um número'}), 400
-
-        cursor = None
-        try:
-            cursor = get_cursor()
-
-            # Verificar se o item existe
-            cursor.execute("SELECT Nome FROM itens WHERE id = %s", (item_id,))
-            item_atual = cursor.fetchone()
-            if not item_atual:
-                print(f"[PUT /api/itens/{item_id}] Erro: Item não encontrado")
-                return jsonify({'success': False, 'error': 'Item não encontrado'}), 404
-
-            print(f"[PUT /api/itens/{item_id}] Item encontrado: {item_atual['Nome']}")
-
-            # Atualizar o item
-            cursor.execute("""
-                UPDATE itens
-                SET Nome = %s, quantidade = %s, descricao = %s
-                WHERE id = %s
-            """, (nome.strip(), quantidade, descricao.strip() if descricao else '', item_id))
-
-            get_db_connection().commit()
-            print(f"[PUT /api/itens/{item_id}] ✅ Item atualizado com sucesso - Nova quantidade: {quantidade}")
-
-            return jsonify({
-                'success': True,
-                'message': f'Item \"{nome}\" atualizado com sucesso'
-            }), 200
-
-        except mysql.connector.Error as e:
-            print(f"[PUT /api/itens/{item_id}] ❌ Erro BD ao editar item: {e}")
-            get_db_connection().rollback()
-            return jsonify({'success': False, 'error': 'Erro ao atualizar item no banco de dados'}), 500
-        finally:
-            close_cursor(cursor)
-
-    except Exception as e:
-        print(f"[PUT /api/itens/{item_id}] ❌ Erro geral ao editar item: {e}")
-        return jsonify({'success': False, 'error': 'Erro interno do servidor'}), 500
-
-@app.route('/api/itens/<int:item_id>', methods=['DELETE'])
-def deletar_item(item_id):
-    """API para deletar um item do catálogo"""
-    print(f"\n[DELETE /api/itens/{item_id}] Requisição de exclusão recebida")
-    
-    check = require_login_or_redirect()
-    if check:
-        print(f"[DELETE /api/itens/{item_id}] Erro: Usuário não autenticado")
-        return jsonify({'success': False, 'error': 'Não autorizado'}), 401
-
-    # Verificar se o usuário é administrador
-    usuario_role = str(session.get('usuario_role', '')).strip().lower()
-    if usuario_role != 'admin':
-        print(f"[DELETE /api/itens/{item_id}] Erro: Usuário não é admin (role={usuario_role})")
-        return jsonify({'success': False, 'error': 'Apenas administradores podem excluir itens'}), 403
-
-    cursor = None
-    try:
-        cursor = get_cursor()
-
-        # Verificar se o item existe
-        cursor.execute("SELECT Nome FROM itens WHERE id = %s", (item_id,))
-        item = cursor.fetchone()
-        if not item:
-            print(f"[DELETE /api/itens/{item_id}] Erro: Item não encontrado")
+    with db_cursor() as cursor:
+        cursor.execute("SELECT id FROM itens WHERE id = %s", (item_id,))
+        if not cursor.fetchone():
             return jsonify({'success': False, 'error': 'Item não encontrado'}), 404
 
-        print(f"[DELETE /api/itens/{item_id}] Item encontrado: {item['Nome']}")
+        cursor.execute(
+            "UPDATE itens SET Nome = %s, quantidade = %s, descricao = %s WHERE id = %s",
+            (nome, quantidade, descricao, item_id),
+        )
+    get_db().commit()
+    log.info("Item %s atualizado por usuário id=%s", item_id, g.user['Id'])
+    return jsonify({'success': True, 'message': f'Item "{nome}" atualizado com sucesso'}), 200
 
-        # Deletar o item
-        cursor.execute("DELETE FROM itens WHERE id = %s", (item_id,))
-        get_db_connection().commit()
-        
-        print(f"[DELETE /api/itens/{item_id}] ✅ Item '{item['Nome']}' excluído com sucesso do banco de dados")
 
-        return jsonify({
-            'success': True,
-            'message': f'Item \"{item['Nome']}\" excluído com sucesso'
-        }), 200
+@app.route('/api/itens/<int:item_id>', methods=['DELETE'])
+@admin_required
+def deletar_item(item_id):
+    try:
+        with db_cursor() as cursor:
+            cursor.execute("SELECT Nome FROM itens WHERE id = %s", (item_id,))
+            item = cursor.fetchone()
+            if not item:
+                return jsonify({'success': False, 'error': 'Item não encontrado'}), 404
+            nome = item['Nome']
 
-    except mysql.connector.Error as e:
-        print(f"[DELETE /api/itens/{item_id}] ❌ Erro BD ao excluir item: {e}")
-        if cursor:
-            get_db_connection().rollback()
-        return jsonify({'success': False, 'error': 'Erro ao excluir item do banco de dados'}), 500
-    except Exception as e:
-        print(f"[DELETE /api/itens/{item_id}] ❌ Erro geral ao excluir item: {e}")
-        return jsonify({'success': False, 'error': 'Erro interno do servidor'}), 500
-    finally:
-        close_cursor(cursor)
+            cursor.execute("DELETE FROM itens WHERE id = %s", (item_id,))
+        get_db().commit()
+    except mysql.connector.IntegrityError:
+        get_db().rollback()
+        return jsonify({'success': False,
+                        'error': 'Item possui reservas associadas e não pode ser excluído'}), 409
+
+    log.info("Item %s excluído por usuário id=%s", item_id, g.user['Id'])
+    return jsonify({'success': True, 'message': f'Item "{nome}" excluído com sucesso'}), 200
+
 
 # =============================================
-# CALENDÁRIO - CORRIGIDO
+# CALENDÁRIO E APIs AUXILIARES
 # =============================================
 
 @app.route('/calendario.html')
+@login_required
 def calendario():
-    check = require_login_or_redirect()
-    if check:
-        return check
-    
-    cursor_itens = None
-    cursor_emprestimo = None
-    cursor_usuarios = None
     try:
-        # Buscar itens disponíveis para reserva
-        cursor_itens = get_cursor()
-        cursor_itens.execute("""
-            SELECT id, Nome, quantidade, categoria 
-            FROM itens 
-            WHERE quantidade > 0 
-            ORDER BY Nome
-        """)
-        itens = cursor_itens.fetchall()
-        
-        # Buscar reservas existentes da tabela emprestimo
-        cursor_emprestimo = get_cursor()
-        cursor_emprestimo.execute("""
-            SELECT 
-                e.id,
-                e.id_itens,
-                e.id_usuario,
-                e.data_reserva,
-                e.hora_inicio,
-                e.hora_fim,
-                e.status,
-                i.Nome AS item_nome,
-                u.nome AS usuario_nome
-            FROM emprestimo e
-            JOIN itens i ON e.id_itens = i.id
-            JOIN usuarios u ON e.id_usuario = u.id
-            ORDER BY e.data_reserva, e.hora_inicio
+        with db_cursor() as cursor:
+            cursor.execute("""
+                SELECT id, Nome, quantidade, categoria
+                FROM itens
+                WHERE quantidade > 0
+                ORDER BY Nome
             """)
+            itens = cursor.fetchall()
 
-        reservas = cursor_emprestimo.fetchall()
-        
-        # Buscar todos os usuários (para admin selecionar)
-        usuarios = []
-        if session.get('usuario_role') == 'admin':
-            cursor_usuarios = get_cursor()
-            cursor_usuarios.execute("SELECT Id, nome, email, role FROM usuarios ORDER BY nome")
-            usuarios = cursor_usuarios.fetchall()
-        
+            cursor.execute("""
+                SELECT e.id, e.id_itens, e.id_usuario, e.data_reserva,
+                       e.hora_inicio, e.hora_fim, e.status,
+                       i.Nome AS item_nome, u.nome AS usuario_nome
+                FROM emprestimo e
+                JOIN itens i ON e.id_itens = i.id
+                JOIN usuarios u ON e.id_usuario = u.id
+                ORDER BY e.data_reserva, e.hora_inicio
+            """)
+            reservas = cursor.fetchall()
+
+            usuarios = []
+            if g.user['role'] == ROLE_ADMIN:
+                cursor.execute("SELECT Id, nome, email, role FROM usuarios ORDER BY nome")
+                usuarios = cursor.fetchall()
+
         return render_template('calendario.html', itens=itens, reservas=reservas, usuarios=usuarios)
-    except Exception as e:
-        print(f"Erro ao carregar calendário: {e}")
+    except mysql.connector.Error:
+        log.exception("Erro ao carregar calendário")
         return render_template('calendario.html', itens=[], reservas=[], usuarios=[])
-    finally:
-        close_cursor(cursor_itens)
-        close_cursor(cursor_emprestimo)
-        close_cursor(cursor_usuarios)
 
-# =============================================
-# NOVAS ROTAS DA API PARA O CALENDÁRIO
-# =============================================
 
 @app.route('/api/itens/disponiveis')
+@login_required
 def api_itens_disponiveis():
-    """API para retornar itens disponíveis para reserva"""
-    check = require_login_or_redirect()
-    if check:
-        return jsonify({'error': 'Não autorizado'}), 401
-    
     tipo = request.args.get('tipo', 'all')
-    cursor = None
-    try:
-        cursor = get_cursor()
-        
-        query = "SELECT id, Nome, quantidade, id_classificacao, categoria FROM itens WHERE quantidade > 0"
-        
-        # Filtrar por tipo se especificado
-        if tipo == 'equipment':
-            query += " AND id_classificacao IN (1, 2, 4, 5)"
-        elif tipo == 'space':
-            query += " AND id_classificacao IN (6, 7)"
-        
-        query += " ORDER BY Nome"
-        
-        cursor.execute(query)
+    query = "SELECT id, Nome, quantidade, id_classificacao, categoria FROM itens WHERE quantidade > 0"
+    params = []
+
+    placeholders = ', '.join(['%s'] * len(CLASSIFICACOES_ESPACO))
+    if tipo == 'equipment':
+        query += f" AND id_classificacao NOT IN ({placeholders})"
+        params.extend(CLASSIFICACOES_ESPACO)
+    elif tipo == 'space':
+        query += f" AND id_classificacao IN ({placeholders})"
+        params.extend(CLASSIFICACOES_ESPACO)
+    query += " ORDER BY Nome"
+
+    with db_cursor() as cursor:
+        cursor.execute(query, params)
         itens = cursor.fetchall()
-        
-        return jsonify({
-            'success': True,
-            'itens': itens
-        })
-        
-    except Exception as e:
-        print(f"Erro ao buscar itens disponíveis: {e}")
-        return jsonify({'error': 'Erro interno do servidor'}), 500
-    finally:
-        close_cursor(cursor)
+    return jsonify({'success': True, 'itens': itens})
+
 
 @app.route('/api/itens')
+@login_required
 def api_itens():
-    """API para retornar todos os itens"""
-    check = require_login_or_redirect()
-    if check:
-        return jsonify({'error': 'Não autorizado'}), 401
-    
-    cursor = None
-    try:
-        cursor = get_cursor()
+    with db_cursor() as cursor:
         cursor.execute("SELECT id, Nome, quantidade, id_classificacao, categoria FROM itens ORDER BY Nome")
         itens = cursor.fetchall()
-        
-        return jsonify({
-            'success': True,
-            'itens': itens
-        })
-        
-    except Exception as e:
-        print(f"Erro ao buscar itens: {e}")
-        return jsonify({'error': 'Erro interno do servidor'}), 500
-    finally:
-        close_cursor(cursor)
+    return jsonify({'success': True, 'itens': itens})
+
 
 @app.route('/api/recursos/tipos')
 def api_recursos_tipos():
-    """API para retornar tipos de recursos"""
     return jsonify({
         'tipos': [
             {'id': 'equipment', 'nome': 'Equipamentos'},
-            {'id': 'space', 'nome': 'Espaços'}
+            {'id': 'space', 'nome': 'Espaços'},
         ]
     })
 
+
 @app.route('/api/admin/usuarios')
+@admin_required
 def api_admin_usuarios():
-    """API para retornar usuários (apenas admin)"""
-    check = require_admin_or_redirect()
-    if check:
-        return jsonify({'error': 'Não autorizado'}), 401
-    
-    cursor = None
-    try:
-        cursor = get_cursor()
+    with db_cursor() as cursor:
         cursor.execute("SELECT Id, nome, email, role FROM usuarios ORDER BY nome")
         usuarios = cursor.fetchall()
-        
-        return jsonify({
-            'success': True,
-            'usuarios': usuarios
-        })
-        
-    except Exception as e:
-        print(f"Erro ao buscar usuários: {e}")
-        return jsonify({'error': 'Erro interno do servidor'}), 500
-    finally:
-        close_cursor(cursor)
+    return jsonify({'success': True, 'usuarios': usuarios})
 
-
-# =============================================
-# API PARA VERIFICAR USUÁRIO ATUAL
-# =============================================
 
 @app.route('/api/usuario/atual')
 def api_usuario_atual():
-    """API para retornar informações do usuário atual com validação do banco"""
-    if not session.get('usuario_logado'):
+    usuario = carregar_usuario_sessao()
+    if not usuario:
         return jsonify({'logado': False})
-    
-    # Buscar informações atualizadas do banco de dados
-    cursor = None
-    try:
-        cursor = get_cursor()
-        email = session.get('usuario_logado')
-        cursor.execute("SELECT Id, nome, email, role FROM usuarios WHERE email = %s", (email,))
-        usuario = cursor.fetchone()
-        
-        if usuario:
-            # Atualizar sessão com dados do banco
-            session['usuario_role'] = usuario['role']
-            session['usuario_nome'] = usuario['nome']
-            session['usuario_id'] = usuario['Id']
-            
-            usuario_info = {
-                'logado': True,
-                'email': usuario['email'],
-                'role': usuario['role'],
-                'nome': usuario['nome'],
-                'id': usuario['Id'],
-                'is_admin': str(usuario['role']).strip().lower() == 'admin'
-            }
-            
-            print(f"Usuário {email} - Role: {usuario['role']} - admin: {usuario_info['is_admin']}")
-            return jsonify(usuario_info)
-        else:
-            # Usuário não encontrado, limpar sessão
-            session.clear()
-            return jsonify({'logado': False})
-            
-    except Exception as e:
-        print(f"Erro ao buscar informações do usuário: {e}")
-        return jsonify({
-            'logado': True,
-            'email': session.get('usuario_logado'),
-            'role': session.get('usuario_role'),
-            'nome': session.get('usuario_nome'),
-            'id': session.get('usuario_id'),
-                'is_admin': str(session.get('usuario_role', '')).strip().lower() == 'admin'
-        })
-    finally:
-        close_cursor(cursor)
+    return jsonify({
+        'logado': True,
+        'email': usuario['email'],
+        'role': usuario['role'],
+        'nome': usuario['nome'],
+        'id': usuario['Id'],
+        'is_admin': usuario['role'] == ROLE_ADMIN,
+    })
+
 
 # =============================================
-# CORREÇÃO DA ROTA DE RESERVAS EXISTENTE
+# RESERVAS (regra única para todas as rotas)
 # =============================================
+
+class ReservaError(Exception):
+    def __init__(self, message, status=400):
+        super().__init__(message)
+        self.message = message
+        self.status = status
+
+
+def _resolver_id_usuario(id_informado):
+    """Usuário dono da reserva: o próprio logado; só admin reserva por outra pessoa."""
+    atual = g.user['Id']
+    if id_informado in (None, '') or str(id_informado) == str(atual):
+        return atual
+    if g.user['role'] != ROLE_ADMIN:
+        raise ReservaError('Sem permissão para reservar em nome de outro usuário', 403)
+    id_int = _int_ou_none(id_informado)
+    if id_int is None:
+        raise ReservaError('Usuário inválido', 400)
+    with db_cursor() as cursor:
+        cursor.execute("SELECT Id FROM usuarios WHERE Id = %s", (id_int,))
+        if not cursor.fetchone():
+            raise ReservaError('Usuário não encontrado', 400)
+    return id_int
+
+
+def registrar_reserva(id_item, data_reserva, hora_inicio, hora_fim, id_usuario=None):
+    """Valida e cria a reserva de forma atômica. Retorna o id criado.
+
+    O item é travado (SELECT ... FOR UPDATE) durante a verificação de conflito
+    e o INSERT, evitando que duas requisições simultâneas reservem o mesmo
+    horário. Conflito = reservas ativas sobrepostas >= quantidade do item.
+    """
+    item_id = _int_ou_none(id_item)
+    if item_id is None:
+        raise ReservaError('Item inválido')
+    try:
+        data = _parse_data(data_reserva)
+    except ValueError:
+        raise ReservaError('Data inválida (use AAAA-MM-DD)')
+    try:
+        inicio = _parse_hora(hora_inicio)
+        fim = _parse_hora(hora_fim)
+    except ValueError:
+        raise ReservaError('Horário inválido (use HH:MM)')
+    if fim <= inicio:
+        raise ReservaError('O horário final deve ser maior que o inicial')
+    if data < agora().date():
+        raise ReservaError('Não é possível reservar em data passada')
+
+    dono_id = _resolver_id_usuario(id_usuario)
+    placeholders = ', '.join(['%s'] * len(STATUS_ATIVOS))
+
+    try:
+        with db_cursor() as cursor:
+            cursor.execute("SELECT id, quantidade FROM itens WHERE id = %s FOR UPDATE", (item_id,))
+            item = cursor.fetchone()
+            if not item:
+                raise ReservaError('Item não encontrado', 404)
+            if item['quantidade'] <= 0:
+                raise ReservaError('Item indisponível', 400)
+
+            cursor.execute(f"""
+                SELECT COUNT(*) AS total FROM emprestimo
+                WHERE id_itens = %s AND data_reserva = %s
+                  AND status IN ({placeholders})
+                  AND hora_inicio < %s AND hora_fim > %s
+            """, (item_id, data, *STATUS_ATIVOS, fim, inicio))
+            if cursor.fetchone()['total'] >= item['quantidade']:
+                raise ReservaError('Horário já reservado', 409)
+
+            cursor.execute("""
+                INSERT INTO emprestimo (id_itens, id_usuario, data_reserva,
+                                        hora_inicio, hora_fim, status, data_realizacao_reserva)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (item_id, dono_id, data, inicio, fim, STATUS_NOVA_RESERVA, agora().date()))
+            novo_id = cursor.lastrowid
+        get_db().commit()
+        return novo_id
+    except Exception:
+        get_db().rollback()
+        raise
+
+
+def _erro_reserva(e):
+    return jsonify({'success': False, 'error': e.message}), e.status
+
 
 @app.route('/api/emprestimo', methods=['GET', 'POST'])
+@login_required
 def api_emprestimo():
-    """API para retornar e criar empréstimos"""
-    check = require_login_or_redirect()
-    if check:
-        return jsonify({'error': 'Não autorizado'}), 401
-    
-    cursor = None
-    try:
-        cursor = get_cursor()
-        
-        # ===== GET: Retorna empréstimos existentes =====
-        if request.method == 'GET':
-            cursor.execute("""
-                SELECT 
-                    id,
-                    id_itens,
-                    id_usuario,
-                    data_reserva,
-                    hora_inicio,
-                    hora_fim,
-                    status
-                FROM emprestimo
-                WHERE status != 'cancelado'
-                ORDER BY data_reserva DESC
-            """)
-            
-            emprestimos_list = cursor.fetchall()
-            emprestimos_dict = {}
-            
-            for emp in emprestimos_list:
-                try:
-                    # Validar se data_reserva não é None
-                    if emp['data_reserva'] is None:
-                        print(f"⚠️ Aviso: Empréstimo {emp['id']} com data_reserva NULL - pulando")
-                        continue
-                    
-                    # Converter data para string com formato correto
-                    if hasattr(emp['data_reserva'], 'strftime'):
-                        data_key = emp['data_reserva'].strftime('%Y-%m-%d')
-                    else:
-                        data_key = str(emp['data_reserva'])
-                    
-                    if data_key not in emprestimos_dict:
-                        emprestimos_dict[data_key] = {}
-                    
-                    # Converter hora_inicio para string
-                    if hasattr(emp['hora_inicio'], 'strftime'):
-                        hora_inicio_str = emp['hora_inicio'].strftime('%H:%M')
-                    else:
-                        hora_inicio_str = str(emp['hora_inicio'])[:5]  # Pega só HH:MM
-                    
-                    # Converter hora_fim para string
-                    if hasattr(emp['hora_fim'], 'strftime'):
-                        hora_fim_str = emp['hora_fim'].strftime('%H:%M')
-                    else:
-                        hora_fim_str = str(emp['hora_fim'])[:5]  # Pega só HH:MM
-                    
-                    slot_key = f"{hora_inicio_str}-{hora_fim_str}"
-                    
-                    emprestimos_dict[data_key][slot_key] = {
-                        'id': emp['id'],
-                        'resourceId': emp['id_itens'],
-                        'userId': emp['id_usuario'],
-                        'status': emp['status'],
-                        'startTime': hora_inicio_str,
-                        'endTime': hora_fim_str
-                    }
-                    
-                    print(f"✅ Processado: {data_key} {slot_key}")
-                    
-                except Exception as e:
-                    print(f"❌ Erro ao processar empréstimo {emp.get('id')}: {str(e)}")
-                    import traceback
-                    traceback.print_exc()
-                    continue
-            
-            print(f"✅ Retornando {len(emprestimos_dict)} datas com empréstimos")
-            return jsonify({'emprestimos': emprestimos_dict}), 200
-        
-        # ===== POST: Criar novo empréstimo =====
-        elif request.method == 'POST':
-            data = request.get_json()
-            
-            required_fields = ['id_itens', 'data_reserva', 'hora_inicio', 'hora_fim']
-            if not all(field in data for field in required_fields):
-                return jsonify({'error': 'Campos obrigatórios faltando'}), 400
-            
-            id_usuario = session.get('usuario_id')
-            
-            cursor.execute("""
-                SELECT COUNT(*) as count FROM emprestimo
-                WHERE id_itens = %s 
-                AND data_reserva = %s
-                AND status != 'cancelado'
-                AND (
-                    (hora_inicio < %s AND hora_fim > %s) OR
-                    (hora_inicio < %s AND hora_fim > %s)
-                )
-            """, (
-                data['id_itens'],
-                data['data_reserva'],
-                data['hora_fim'],
-                data['hora_inicio'],
-                data['hora_fim'],
-                data['hora_inicio']
-            ))
-            
-            conflict = cursor.fetchone()
-            if conflict and conflict['count'] > 0:
-                return jsonify({'error': 'Horário já reservado'}), 409
-            
-            data_realizacao_reserva = data.get('data_realizacao_reserva') or datetime.now().strftime('%Y-%m-%d')
+    if request.method == 'GET':
+        filtro_item = _int_ou_none(request.args.get('id_itens'))
+        query = """
+            SELECT id, id_itens, id_usuario, data_reserva, hora_inicio, hora_fim, status
+            FROM emprestimo
+            WHERE status != 'cancelado'
+        """
+        params = []
+        if filtro_item is not None:
+            query += " AND id_itens = %s"
+            params.append(filtro_item)
+        query += " ORDER BY data_reserva DESC"
 
-            cursor.execute("""
-                INSERT INTO emprestimo (id_itens, id_usuario, data_reserva, 
-                                    hora_inicio, hora_fim, status, data_realizacao_reserva)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """, (data['id_itens'], id_usuario, data['data_reserva'], 
-                  data['hora_inicio'], data['hora_fim'], 'ativo', data_realizacao_reserva))
-            
-            get_db_connection().commit()
-            
-            return jsonify({
-                'success': True,
-                'id': cursor.lastrowid,
-                'message': 'Reserva criada com sucesso'
-            }), 201
-    
-    except Exception as e:
-        print(f"❌ Erro em /api/emprestimo: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
-    
-    finally:
-        if cursor:
-            close_cursor(cursor)
+        with db_cursor() as cursor:
+            cursor.execute(query, params)
+            emprestimos = cursor.fetchall()
+
+        # Estrutura: {data: {"HH:MM-HH:MM": {...}}}. Atenção: itens diferentes no
+        # mesmo horário colidem na mesma chave; use ?id_itens=<id> para consultar um item.
+        resultado = {}
+        for emp in emprestimos:
+            if emp['data_reserva'] is None:
+                continue
+            data_key = (emp['data_reserva'].strftime('%Y-%m-%d')
+                        if hasattr(emp['data_reserva'], 'strftime') else str(emp['data_reserva']))
+            inicio = fmt_hhmm(emp['hora_inicio'])
+            fim = fmt_hhmm(emp['hora_fim'])
+            resultado.setdefault(data_key, {})[f"{inicio}-{fim}"] = {
+                'id': emp['id'],
+                'resourceId': emp['id_itens'],
+                'userId': emp['id_usuario'],
+                'status': emp['status'],
+                'startTime': inicio,
+                'endTime': fim,
+            }
+        return jsonify({'emprestimos': resultado}), 200
+
+    data = request.get_json(silent=True) or {}
+    obrigatorios = ['id_itens', 'data_reserva', 'hora_inicio', 'hora_fim']
+    if not all(data.get(campo) for campo in obrigatorios):
+        return jsonify({'success': False, 'error': 'Campos obrigatórios faltando'}), 400
+    try:
+        novo_id = registrar_reserva(data['id_itens'], data['data_reserva'],
+                                    data['hora_inicio'], data['hora_fim'],
+                                    data.get('id_usuario'))
+    except ReservaError as e:
+        return _erro_reserva(e)
+    return jsonify({'success': True, 'id': novo_id, 'message': 'Reserva criada com sucesso'}), 201
+
 
 @app.route('/api/reservas', methods=['POST'])
+@login_required
 def criar_reserva():
-    """Criar uma nova reserva - formato compatível com frontend"""
-    check = require_login_or_redirect()
-    if check:
-        return jsonify({'success': False, 'error': 'Não autorizado'}), 401
-    
+    """Criar reserva - formato compatível com o frontend ("HH:MM às HH:MM")."""
+    data = request.get_json(silent=True) or {}
+    recurso_id = data.get('recurso')
+    data_reserva = data.get('data_reserva')
+    horario = data.get('horario')
+
+    if not all([recurso_id, data_reserva, horario]):
+        return jsonify({'success': False, 'error': 'Dados incompletos'}), 400
+
     try:
-        data = request.get_json()
-        recurso_id = data.get('recurso')
-        data_reserva = data.get('data_reserva')
-        horario = data.get('horario')
-        id_usuario = data.get('id_usuario')
-        resource_name = data.get('resource_name', '')
-        
-        print(f"\n[POST /api/reservas] Dados recebidos: recurso={recurso_id}, data={data_reserva}, horario={horario}, id_usuario={id_usuario}")
-        
-        # Validar dados
-        if not all([recurso_id, data_reserva, horario]):
-            print(f"[POST /api/reservas] Erro: Dados incompletos")
-            return jsonify({'success': False, 'error': 'Dados incompletos'}), 400
-        
-        # Buscar usuário atual se id_usuario não foi fornecido
-        if not id_usuario:
-            usuario = get_user_data(session.get('usuario_logado'))
-            if not usuario:
-                return jsonify({'success': False, 'error': 'Usuário não encontrado'}), 400
-            id_usuario = usuario['Id']
-        
-        # Parse do horário (formato: "HH:MM às HH:MM")
-        try:
-            hora_inicio, hora_fim = horario.split(' às ')
-            print(f"[POST /api/reservas] Horários: início={hora_inicio}, fim={hora_fim}")
-        except ValueError:
-            return jsonify({'success': False, 'error': 'Formato de horário inválido'}), 400
-        
-        # Verificar conflitos de reserva
-        cursor_check = None
-        cursor_insert = None
-        try:
-            cursor_check = get_cursor()
-            print(f"[POST /api/reservas] Verificando conflitos de horário...")
-            cursor_check.execute("""
-                SELECT 1 FROM emprestimo 
-                WHERE id_itens = %s AND status IN ('em uso', 'reservado')
-                AND data_reserva = %s
-                AND (
-                    (hora_inicio BETWEEN %s AND %s OR hora_fim BETWEEN %s AND %s)
-                    OR (%s BETWEEN hora_inicio AND hora_fim OR %s BETWEEN hora_inicio AND hora_fim)
-                )
-            """, (recurso_id, data_reserva, 
-                  hora_inicio, hora_fim, hora_inicio, hora_fim,
-                  hora_inicio, hora_fim))
-            
-            if cursor_check.fetchone():
-                print(f"[POST /api/reservas] Conflito de horário detectado")
-                return jsonify({'success': False, 'error': 'Conflito de horário com reserva existente'}), 400
-            
-            # Inserir reserva
-            cursor_insert = get_cursor()
-            data_realizacao = datetime.now().strftime('%Y-%m-%d')
-            print(f"[POST /api/reservas] Inserindo reserva: id_itens={recurso_id}, id_usuario={id_usuario}, data={data_reserva}, inicio={hora_inicio}, fim={hora_fim}, data_realizacao={data_realizacao}")
-            cursor_insert.execute("""
-                INSERT INTO emprestimo (id_itens, id_usuario, data_reserva, 
-                                    hora_inicio, hora_fim, status, data_realizacao_reserva)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """, (recurso_id, id_usuario, data_reserva, 
-                  hora_inicio, hora_fim, 'reservado', data_realizacao))
-            
-            get_db_connection().commit()
-            print(f"[POST /api/reservas] ✅ Reserva criada com sucesso")
-            return jsonify({'success': True, 'message': 'Reserva criada com sucesso'})
-            
-        except mysql.connector.Error as e:
-            print(f"[POST /api/reservas] ❌ Erro MySQL: {str(e)}")
-            print(f"[POST /api/reservas] Erro details: {e.msg}")
-            get_db_connection().rollback()
-            return jsonify({'success': False, 'error': f'Erro: {e.msg}'}), 500
-        finally:
-            close_cursor(cursor_check)
-            close_cursor(cursor_insert)
-            
-    except Exception as e:
-        print(f"[POST /api/reservas] ❌ Erro geral: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': 'Erro interno do servidor'}), 500
+        hora_inicio, hora_fim = str(horario).split(' às ')
+    except ValueError:
+        return jsonify({'success': False, 'error': 'Formato de horário inválido'}), 400
+
+    try:
+        novo_id = registrar_reserva(recurso_id, data_reserva, hora_inicio, hora_fim,
+                                    data.get('id_usuario'))
+    except ReservaError as e:
+        return _erro_reserva(e)
+    return jsonify({'success': True, 'id': novo_id, 'message': 'Reserva criada com sucesso'})
+
 
 @app.route('/api/reservas/<int:reserva_id>', methods=['DELETE'])
+@login_required
 def cancelar_reserva(reserva_id):
-    """Cancelar um empréstimo"""
-    check = require_login_or_redirect()
-    if check:
-        return jsonify({'success': False, 'error': 'Não autorizado'}), 401
-    
-    cursor = None
-    try:
-        cursor = get_cursor()
-        
-        # Verificar se o usuário é o dono do empréstimo ou admin
-        cursor.execute("""
-            SELECT e.id, e.id_usuario, e.status 
-            FROM emprestimo e 
-            WHERE e.id = %s
-        """, (reserva_id,))
-        
+    with db_cursor() as cursor:
+        cursor.execute("SELECT id, id_usuario, status FROM emprestimo WHERE id = %s", (reserva_id,))
         emprestimo = cursor.fetchone()
         if not emprestimo:
             return jsonify({'success': False, 'error': 'Empréstimo não encontrado'}), 404
-        
-        # Obter ID do usuário atual
-        usuario_id_atual = session.get('usuario_id')
-        usuario_role_atual = session.get('usuario_role', 'professor').lower()
-        
-        # Verificar permissão
-        is_admin = usuario_role_atual == 'admin'
-        is_owner = int(emprestimo['id_usuario']) == int(usuario_id_atual)
-        
+
+        is_admin = g.user['role'] == ROLE_ADMIN
+        is_owner = str(emprestimo['id_usuario']) == str(g.user['Id'])
         if not (is_admin or is_owner):
-            print(f"[DELETE /api/reservas/{reserva_id}] Sem permissão: usuario_id={usuario_id_atual}, reserva_usuario_id={emprestimo['id_usuario']}, is_admin={is_admin}")
+            log.warning("Usuário id=%s tentou cancelar reserva %s sem permissão",
+                        g.user['Id'], reserva_id)
             return jsonify({'success': False, 'error': 'Sem permissão para cancelar este empréstimo'}), 403
-        
-        # Cancelar empréstimo
-        print(f"[DELETE /api/reservas/{reserva_id}] Cancelando empréstimo. ID: {emprestimo['id']}, User: {usuario_id_atual}, Admin: {is_admin}")
-        cursor.execute("UPDATE emprestimo SET status = 'cancelado' WHERE id = %s", (reserva_id,))
-        get_db_connection().commit()
-        
-        print(f"[DELETE /api/reservas/{reserva_id}] ✅ Empréstimo cancelado com sucesso")
-        return jsonify({'success': True, 'message': 'Empréstimo cancelado com sucesso'})
-        
-    except Exception as e:
-        print(f"[DELETE /api/reservas/{reserva_id}] ❌ Erro ao cancelar empréstimo: {e}")
-        return jsonify({'success': False, 'error': 'Erro interno do servidor'}), 500
-    finally:
-        close_cursor(cursor)
+
+        if emprestimo['status'] != 'cancelado':
+            cursor.execute("UPDATE emprestimo SET status = 'cancelado' WHERE id = %s", (reserva_id,))
+    get_db().commit()
+    return jsonify({'success': True, 'message': 'Empréstimo cancelado com sucesso'})
 
 
 # =============================================
-# ROTA DE GERENCIAMENTO DE USUÁRIOS
+# GERENCIAMENTO DE USUÁRIOS
 # =============================================
 
 @app.route('/usuarios.html')
+@admin_required
 def usuarios():
-    """Rota para exibir e gerenciar usuários (apenas admin)"""
-    # Verificar se o usuário é administrador
-    check = require_admin_or_redirect()
-    if check:
-        return check
-    
-    cursor = None
-    try:
-        cursor = get_cursor()
-        # Buscar todos os usuários do banco de dados
+    with db_cursor() as cursor:
         cursor.execute("SELECT Id, nome, email, role FROM usuarios ORDER BY nome")
-        usuarios = cursor.fetchall()
-        
-        
-        return render_template('usuarios.html', usuarios=usuarios)
-        
-    except Exception as e:
-        print(f"Erro ao buscar usuários: {e}")
-        return render_template('usuarios.html', usuarios=[])
-    finally:
-        close_cursor(cursor)
+        lista = cursor.fetchall()
+    return render_template('usuarios.html', usuarios=lista)
+
 
 # =============================================
-# ROTA DE LOGOUT
+# INICIALIZAÇÃO
 # =============================================
 
-@app.route('/logout')
-def logout():
-    """Rota para fazer logout do usuário"""
-    # Limpa todos os dados da sessão
-    session.clear()
-    print("Usuário fez logout")  # Log para debug
-    return redirect(url_for('login'))
+try:
+    with app.app_context():
+        init_db()
+except Exception as e:  # o app sobe mesmo se o banco estiver fora do ar
+    log.warning("Inicialização do banco ignorada: %s", e)
+
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Debug apenas com FLASK_DEBUG=1 no .env. Em produção use gunicorn/waitress.
+    app.run(debug=os.getenv("FLASK_DEBUG", "0") == "1")
